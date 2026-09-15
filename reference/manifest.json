@@ -1,0 +1,48 @@
+{
+  "captured": "2026-09-13T13:56:11.782Z",
+  "purpose": "Source snapshots for UAT 1 port; not loaded into browser",
+  "files": [
+    {
+      "copy": "reference/aluminum_engine.rb",
+      "source": "../cabinex_ai/cbx_hybrid_engine.rb",
+      "bytes": 118028,
+      "sha256": "0b9f4e0bfe34970409c1f12e44a2964ef773e2ab6c5bf29dc29b277e52487f0b"
+    },
+    {
+      "copy": "reference/combined_engine.rb",
+      "source": "../cbx_hybrid_engine.rb",
+      "bytes": 186831,
+      "sha256": "6698f42ce45e53acb42220fe0bb147b66c285af1ae6b192156dea4de07814bbe"
+    },
+    {
+      "copy": "reference/sketchup_planner.rb",
+      "source": "../cabinex_ai/cbx_hybrid_planner.rb",
+      "bytes": 135304,
+      "sha256": "c5e09c822bcefd0a0a2b80226ab11257ae766126e1ddc3749ccaa3c1d4eb6836"
+    },
+    {
+      "copy": "reference/layout_solver.rb",
+      "source": "../cabinex_ai/cbx_layout_solver.rb",
+      "bytes": 35772,
+      "sha256": "fc484a3954f5f0bff4c59780f6f9f7573ede9b9e8df304fcdae786a908c94d16"
+    },
+    {
+      "copy": "reference/master_studio.rb",
+      "source": "../Cabinex_Master_Studio/cabinex_master.rb",
+      "bytes": 111911,
+      "sha256": "2588c9ad240d916acecce28e9575b12128d9688e222cca4b7b506325d27b698e"
+    },
+    {
+      "copy": "reference/assembly_plan.md",
+      "source": "../Cabinex_Assembly_Lab/PLAN.md",
+      "bytes": 7970,
+      "sha256": "8509cba4dacd5ceb9900e477aed8cb42a1c2953bd1fd93c1bac813c0f935cee8"
+    },
+    {
+      "copy": "reference/browser_frame.js",
+      "source": "C:/Users/asank/Documents/Aluminum/aluminum-kitchen-designer/frameanddoor.js",
+      "bytes": 34540,
+      "sha256": "cff2f093c2a68bf1ac87edb000f3d22cec9e263d4049dfb4fa88228071b51f12"
+    }
+  ]
+}

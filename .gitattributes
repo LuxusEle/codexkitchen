@@ -1,0 +1,2 @@
+# Preserve the copied fabrication reference sources byte-for-byte.
+reference/** -text

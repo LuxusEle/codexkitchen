@@ -1,0 +1,102 @@
+{
+  "copiedAt": "2026-09-13T15:10:22.050Z",
+  "policy": "Originals unchanged. Snapshots unmodified; web adapters live in src.",
+  "files": [
+    {
+      "source": "C:/Users/asank/Documents/Aluminum/frame.js",
+      "target": "aluminum/frame.js",
+      "sha256": "a90e08e255828b6d2879012c74336e1a3208a118d56c958e5824d1494a55c242",
+      "bytes": 1764
+    },
+    {
+      "source": "C:/Users/asank/Documents/Aluminum/sash.js",
+      "target": "aluminum/sash.js",
+      "sha256": "250cb2ef7502e80da281b36caaea0f06f4b4a0c7e3aff18c97212b7fc257b89f",
+      "bytes": 6211
+    },
+    {
+      "source": "C:/Users/asank/Documents/Aluminum/sashdoor.js",
+      "target": "aluminum/sashdoor.js",
+      "sha256": "bb51d6b29ec3428f4ee393af2708d1ed5b7bedba6f8b6a1423afda557ba416ed",
+      "bytes": 8117
+    },
+    {
+      "source": "C:/Users/asank/Documents/Aluminum/gbb.js",
+      "target": "aluminum/gbb.js",
+      "sha256": "11d337210f93bc4d5ff55f3bce50b2bfee1151c98c3cbf9ac9093d0584f1ed07",
+      "bytes": 7319
+    },
+    {
+      "source": "C:/Users/asank/Documents/Aluminum/custom_profile.js",
+      "target": "aluminum/custom_profile.js",
+      "sha256": "7a0a31bde6384c6bd66bd93d804f92f02bc155974ef228698e919f857873f16d",
+      "bytes": 2560
+    },
+    {
+      "source": "C:/Users/asank/Documents/Aluminum/frameanddoor.js",
+      "target": "aluminum/frameanddoor.js",
+      "sha256": "cff2f093c2a68bf1ac87edb000f3d22cec9e263d4049dfb4fa88228071b51f12",
+      "bytes": 34540
+    },
+    {
+      "source": "C:/Users/asank/Documents/Aluminum/kitchen_assembly.js",
+      "target": "aluminum/kitchen_assembly.js",
+      "sha256": "8836ff49143394f5fe31ba0434db0d45b82eb95c725fcfb6d44b341ef533f011",
+      "bytes": 10573
+    },
+    {
+      "source": "C:/Users/asank/Documents/Aluminum/estimator.js",
+      "target": "aluminum/estimator.js",
+      "sha256": "a02ae4d3cb0c91ccce9c7c60948aa3b5e30060e9bea3d42b2b80b1e164e28a82",
+      "bytes": 31127
+    },
+    {
+      "source": "C:/Users/asank/Documents/Aluminum/src/frame.js",
+      "target": "aluminum/src/frame.js",
+      "sha256": "7f8ca2d54b3ad2d932bed326942125f29e4354b25f2d2655c5ce039147cd839a",
+      "bytes": 11151
+    },
+    {
+      "source": "C:/Users/asank/Documents/Aluminum/src/sash_door.js",
+      "target": "aluminum/src/sash_door.js",
+      "sha256": "4051fa9c6e06dce0d033b2306d6293882ddfdfe090f0b3d60ab22b4c5587f03a",
+      "bytes": 6520
+    },
+    {
+      "source": "C:/Users/asank/Documents/Aluminum/consolidated-designer/src/modules/frameGenerator.js",
+      "target": "aluminum/consolidated-designer/src/modules/frameGenerator.js",
+      "sha256": "5785c8d5f5a6bb95a86e6070981afda3a2407d32c6930ddc04720cf37a3f441c",
+      "bytes": 7008
+    },
+    {
+      "source": "C:/Users/asank/Documents/Aluminum/consolidated-designer/src/modules/sashDoorGenerator.js",
+      "target": "aluminum/consolidated-designer/src/modules/sashDoorGenerator.js",
+      "sha256": "1cf6028f88dccb93da6abde57b55f03d789d747dc5d7f0ba13b12831dddd3963",
+      "bytes": 7777
+    },
+    {
+      "source": "C:/Users/asank/Documents/Aluminum/consolidated-designer/src/modules/coreUtils.js",
+      "target": "aluminum/consolidated-designer/src/modules/coreUtils.js",
+      "sha256": "4250cc23cec33dc8c81f54b4fc5afb637ae6f6c3c853c06eeddd515d9aac2545",
+      "bytes": 2580
+    },
+    {
+      "source": "C:/Users/asank/Documents/Aluminum/consolidated-designer/src/modules/dxfExporter.js",
+      "target": "aluminum/consolidated-designer/src/modules/dxfExporter.js",
+      "sha256": "16478149d3fcdddcd14ae0a32246aebd358670ba100ffc2585b4eff3b0e03217",
+      "bytes": 1473
+    },
+    {
+      "source": "C:\\Users\\asank\\Documents\\CabinexAi\\Cabinex_Master_Studio\\cabinex_master.rb",
+      "target": "master/cabinex_master.rb",
+      "sha256": "2588c9ad240d916acecce28e9575b12128d9688e222cca4b7b506325d27b698e",
+      "bytes": 111911
+    },
+    {
+      "source": "C:\\Users\\asank\\Documents\\CabinexAi\\cbx_hybrid_engine.rb",
+      "target": "combined/combined_engine.rb",
+      "sha256": "6698f42ce45e53acb42220fe0bb147b66c285af1ae6b192156dea4de07814bbe",
+      "bytes": 186831
+    }
+  ]
+}

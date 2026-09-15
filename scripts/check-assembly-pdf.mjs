@@ -1,0 +1,15 @@
+import {mkdirSync,writeFileSync} from 'node:fs';
+import assert from 'node:assert/strict';
+import {initialProject,solve} from '../src/model.js';
+import {fabricationPlan} from '../src/fabrication.js';
+import {assemblyPdf,assemblyRuns} from '../src/assembly-pdf.js';
+const p=initialProject(),job=fabricationPlan(p,solve(p));
+const runs=assemblyRuns(job);
+assert.ok(runs.length>0);
+const doc=assemblyPdf(job,runs[0].id);
+assert.ok(doc.getNumberOfPages()>=3);
+mkdirSync('output/pdf',{recursive:true});
+writeFileSync('output/pdf/frame-assembly-uat.pdf',Buffer.from(doc.output('arraybuffer')));
+const all=assemblyPdf(job);
+assert.ok(all.getNumberOfPages()>doc.getNumberOfPages());
+console.log(`PDF checked: ${runs.length} frame runs; individual ${doc.getNumberOfPages()} pages; all ${all.getNumberOfPages()} pages.`);
