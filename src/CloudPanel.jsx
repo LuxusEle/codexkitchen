@@ -7,7 +7,7 @@ import './cloud.css';
 export default function CloudPanel({project,onProject,onClose,pack,hasPreview}){
   const [session,setSession]=useState(null),[member,setMember]=useState(null),[projects,setProjects]=useState([]),[assets,setAssets]=useState([]),
     [members,setMembers]=useState([]),[email,setEmail]=useState(''),[name,setName]=useState(''),[password,setPassword]=useState(''),
-    [signup,setSignup]=useState(false),[busy,setBusy]=useState(false),[message,setMessage]=useState(''),[config,setConfig]=useState(null),[progress,setProgress]=useState(0);
+    [signup,setSignup]=useState(false),[busy,setBusy]=useState(false),[message,setMessage]=useState(''),[config,setConfig]=useState(null),[progress,setProgress]=useState(0),[otp,setOtp]=useState('');
   const fileInput=useRef(),current=useRef(project);current.current=project;
   const binding=project.cloud?.ownerId===session?.user?.id?project.cloud:null;
   async function listCloud(){const value=await cloudRequest('projects');setProjects(value.projects);}
@@ -27,7 +27,17 @@ export default function CloudPanel({project,onProject,onClose,pack,hasPreview}){
   async function submit(e){e.preventDefault();await run(async()=>{
     const result=signup?await authClient.signUp.email({name:name.trim()||email.split('@')[0],email,password}):await authClient.signIn.email({email,password});
     setPassword('');if(result.error)throw Error(result.error.message||'Sign in failed.');await refresh();
-    if(signup)setMessage('Account created. Check your email for verification, then sign in. New users require admin approval.');
+    if(signup)setMessage('Account created. Use Send verification code below to verify your email. New users require admin approval.');
+  });}
+  async function sendCode(){
+    const result=await authClient.emailOtp.sendVerificationOtp({email:session.user.email,type:'email-verification'});
+    if(result.error)throw Error(result.error.message||'Could not send verification code.');
+    setMessage('Verification code sent. Check your email and spam folder.');
+  }
+  async function verifyCode(e){e.preventDefault();await run(async()=>{
+    const result=await authClient.emailOtp.verifyEmail({email:session.user.email,otp:otp.trim()});
+    if(result.error)throw Error(result.error.message||'Verification failed.');
+    setOtp('');await refresh();setMessage('Email verified. If admin access has not refreshed, sign out and sign in again.');
   });}
   async function save(copy=false){
     if(hasPreview)throw Error('OK or Cancel the current design preview before saving to cloud.');
@@ -65,6 +75,12 @@ export default function CloudPanel({project,onProject,onClose,pack,hasPreview}){
       <p>New accounts need administrator approval. Passwords go directly to Neon Auth; they are not saved in this app.</p>
     </form>:<>
       <p>Signed in: <strong>{session.user.email}</strong></p>
+      {!session.user.emailVerified&&<form onSubmit={verifyCode}>
+        <h3>Verify your email</h3><p>Admin access requires a verified email address.</p>
+        <button type="button" className="secondary compact" disabled={busy} onClick={()=>run(sendCode)}>Send verification code</button>
+        <label className="field">Email verification code<input value={otp} onChange={e=>setOtp(e.target.value)} autoComplete="one-time-code" inputMode="numeric" required maxLength={12}/></label>
+        <button className="primary compact" disabled={busy||!otp.trim()}>Verify email</button>
+      </form>}
       <div className="row"><button className="secondary compact" disabled={busy} onClick={()=>run(refresh)}>Refresh access</button><button className="text" disabled={busy} onClick={()=>run(async()=>{const r=await authClient.signOut();if(r.error)throw Error(r.error.message);setSession(null);setMember(null);setAssets([]);setMembers([]);setProjects([]);})}>Sign out</button></div>
       {!active&&<p className="cloud-message">{member?.status==='blocked'?'Access is blocked. Contact the administrator.':'Awaiting administrator approval. Verify your email before using the admin account.'}</p>}
       {active&&<>
