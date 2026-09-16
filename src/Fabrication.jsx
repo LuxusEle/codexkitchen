@@ -10,6 +10,7 @@ import {
 import { SASH_PROFILE, HANDLE_PROFILE } from "./sash-profile.js";
 import provenance from "../reference/fabrication/manifest.json";
 import { costingSettings, kitchenEstimate } from "./costing.js";
+import LengthInput from './LengthInput.jsx';
 
 const fmt = (n) =>
   Number(n).toLocaleString(undefined, { maximumFractionDigits: 1 });
@@ -48,7 +49,7 @@ export function FabricationControls({ p, job, onChange }) {
       <h1>Cutting & BOM</h1>
       <p className="intro">
         Shared run frames, U-notched cladding, sash and integrated handle bars.
-        All dimensions in mm.
+        Cutting outputs stay in mm. Stock sizes can be entered in either input unit.
       </p>
       <div className="fab-note">
         Engineering preview. Confirm support spans, hardware and cutting setup
@@ -67,20 +68,19 @@ export function FabricationControls({ p, job, onChange }) {
           ["sheetMargin", "Sheet edge margin"],
           ["rearSupportSpacing", "Rear support spacing"],
         ].map(([key, label]) => (
-          <label className="field" key={key}>
-            {label}
-            <input
-              aria-label={label}
-              type="number"
+          <div className="field" key={key}>
+            <span>{label}</span>
+            <LengthInput
+              label={label}
               min={key === "rearSupportSpacing" ? 100 : 0}
               max={key === "rearSupportSpacing" ? 1200 : 30000}
               step="1"
               value={settings[key]}
-              onChange={(e) =>
-                onChange({ ...settings, [key]: Number(e.target.value) })
+              onChange={(value) =>
+                onChange({ ...settings, [key]: value })
               }
             />
-          </label>
+          </div>
         ))}
       </div>
       <label className="field">

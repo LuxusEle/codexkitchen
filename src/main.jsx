@@ -35,6 +35,7 @@ import UserMenu from './UserMenu.jsx';
 import ThemeToggle from './ThemeToggle.jsx';
 import Dashboard from './Dashboard.jsx';
 import BoxChooser from './BoxChooser.jsx';
+import LengthInput,{MeasurementProvider,MeasurementSwitch,checkLengthInputs} from './LengthInput.jsx';
 import {cloudRequest} from './cloud-client.js';
 import {projectIdentity,projectContent,writeDraft,removeDraft,detachedProject} from './project-workspace.js';
 import {copyRenderPack,copyRenderImage,prepareClipboardSheet} from './render-clipboard.js';
@@ -83,24 +84,7 @@ const STEPS = [
 ];
 function Num({ label, value, onChange, min = 0, max = 12000, step = 50, disabled=false }) {
   return (
-    <label className="field">
-      {label}
-      <div className="number-wrap">
-        <input
-          aria-label={label}
-          type="number"
-          value={Number.isFinite(value) ? Math.round(value * 100) / 100 : ""}
-          min={min}
-          max={max}
-          step={step}
-          disabled={disabled}
-          onChange={(e) =>
-            onChange(e.target.value === "" ? 0 : Number(e.target.value))
-          }
-        />
-        <span>mm</span>
-      </div>
-    </label>
+    <div className="field"><span>{label}</span><LengthInput {...{label,value,onChange,min,max,step,disabled}}/></div>
   );
 }
 function Plan({ p, plan, selected, onSelect, onMoveUnit, onMoveOpening, onMoveStart, onMoveEnd, dragEnabled, rowFilter='all', previewIds=[] }) {
@@ -467,6 +451,7 @@ function App({account,initialDocument,initialDirty,onDashboard}) {
   });
   const saveNamedProject=async(copy=false)=>{
     if(saving)return;
+    if(!checkLengthInputs()){setToast('Correct the highlighted feet / inches entry before saving.');return;}
     if(moveReview){setToast('OK or Cancel the design preview before saving.');return;}
     setSaving(true);setSaveError('');
     try{
@@ -621,8 +606,10 @@ function App({account,initialDocument,initialDirty,onDashboard}) {
         your kitchen.
       </h1>
       <p className="intro">
-        Start with the measured room. All dimensions are in millimeters.
+        Enter the measured room in mm or feet + inches using Input units above the view. Inch fractions such as 3 1/2 are accepted. Drawings and cutting stay in mm.
       </p>
+      <MeasurementSwitch/>
+      <p className="length-help">Your input-unit choice is remembered on this device.</p>
       <label className="field">
         Project name
         <input
@@ -1413,10 +1400,10 @@ function App({account,initialDocument,initialDirty,onDashboard}) {
               <p className="eyebrow">LIVE WORKSPACE</p>
               <h2>{p.name || "Untitled kitchen"}</h2>
             </div>
-            <div className="model-badge">
+            <div className="workspace-options"><MeasurementSwitch/><div className="model-badge">
               <Layers size={15} />
               {p.style.mode} aluminum
-            </div>
+            </div></div>
           </div>
           {roomProblems.length>0&&<div className="room-blocker" role="alert"><strong>Room / opening measurements are stopping cabinet generation</strong><ul>{roomProblems.map((problem,i)=><li key={i}>{problem}</li>)}</ul><button className="secondary compact" onClick={()=>setStep(1)}>Check openings</button><p>Resizing the room does not resize a measured door or window. Correct its wall, offset or size; your cabinet requirements are kept.</p></div>}
           <BoxChooser p={p} plan={plan} selected={selected} onSelect={id=>{setSelected(id);setStep(4);}} disabled={!!moveReview||!!changeApproval||!!gapFix} onApply={patch=>{update(patch);setSelected(null);setToast('Box choices applied. Review the 3D design, then save your project.');}}/>
@@ -1778,4 +1765,4 @@ function Workspace({account}){
   const [active,setActive]=useState(null);
   return active?<App key={projectIdentity(active.document)} account={account} initialDocument={active.document} initialDirty={active.dirty} onDashboard={()=>setActive(null)}/>:<Dashboard account={account} onOpen={setActive}/>;
 }
-createRoot(document.getElementById("root")).render(<AuthGate>{account=><Workspace key={account.user.id} account={account}/>}</AuthGate>);
+createRoot(document.getElementById("root")).render(<MeasurementProvider><AuthGate>{account=><Workspace key={account.user.id} account={account}/>}</AuthGate></MeasurementProvider>);
