@@ -46,7 +46,7 @@ export async function businessOperation({db,user,op,method,req,url,projectFor}) 
     const start=new Date(`${period}-01T00:00:00+05:30`),[year,month]=period.split('-').map(Number),end=new Date(Date.UTC(year,month,1)-330*60000);
     const visible=sql`${projects.document}->'_workspace'->>'deletedAt' is null`;
     const stats=await db.select({ownerId:projects.ownerId,businessId:projects.businessId,total:sql`count(*)::int`,created:sql`count(*) filter (where ${projects.createdAt} >= ${start} and ${projects.createdAt} < ${end})::int`,approved:sql`count(*) filter (where ${projects.reviewStatus} = 'approved' and ${projects.reviewedRevision} = ${projects.revision} and ${projects.reviewedAt} >= ${start} and ${projects.reviewedAt} < ${end})::int`}).from(projects).where(visible).groupBy(projects.ownerId,projects.businessId);
-    const staff=await db.select({id:members.id,username:members.username,name:members.name,status:members.status,businessId:members.businessId,monthlyTarget:members.monthlyTarget,lastSeen:presence.lastSeen,lastActive:presence.lastActive,projectId:presence.projectId}).from(members).leftJoin(presence,eq(members.id,presence.userId));
+    const staff=await db.select({id:members.id,username:members.username,name:members.name,status:members.status,businessId:members.businessId,monthlyTarget:members.monthlyTarget,barTokens:members.barTokens,lastSeen:presence.lastSeen,lastActive:presence.lastActive,projectId:presence.projectId}).from(members).leftJoin(presence,eq(members.id,presence.userId));
     return {month:period,staff,stats,serverTime:new Date().toISOString()};
   }
   if(op==='review'&&method==='PATCH') {

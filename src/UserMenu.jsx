@@ -15,7 +15,7 @@ export default function UserMenu({account}){
     }catch(e){setError(e.message);setBusy(false);}
   }
   return <div className="user-menu" aria-label="Signed-in account">
-    <div className="user-menu-identity"><strong>{account.member.username||account.user.email}</strong><small>{account.member.admin?'Super admin':'Operator'}</small></div>
+    <div className="user-menu-identity"><strong>{account.member.username||account.user.email}</strong><small>{account.member.admin?'Super admin · unrestricted':`Operator · ${account.member.barTokens??0} bar tokens`}</small></div>
     <button type="button" className="secondary compact" disabled={busy} onClick={signOut}>{busy?'Signing out…':'Sign out'}</button>
     {error&&<span role="alert" className="user-menu-error">{error}</span>}
   </div>;

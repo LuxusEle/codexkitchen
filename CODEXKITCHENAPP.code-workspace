@@ -1,0 +1,8 @@
+{
+  "folders": [{ "name": "CODEXKITCHENAPP", "path": "." }],
+  "settings": {
+    "git.autoRepositoryDetection": "subFolders",
+    "git.openRepositoryInParentFolders": "never",
+    "git.repositoryScanMaxDepth": 1
+  }
+}

@@ -1,0 +1,1 @@
+ALTER TABLE "codex_kitchen"."members" ADD COLUMN "bar_tokens" integer DEFAULT 0 NOT NULL;

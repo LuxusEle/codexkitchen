@@ -1,8 +1,7 @@
 import React,{useEffect,useRef,useState} from 'react';
-import {Box,Plus,FolderOpen,Copy,Trash2,RotateCcw,Pencil,Upload} from 'lucide-react';
+import {Box,Plus,FolderOpen,Copy,Trash2,RotateCcw,Pencil,Upload,ShieldCheck} from 'lucide-react';
 import UserMenu from './UserMenu.jsx';
 import ThemeToggle from './ThemeToggle.jsx';
-import AdminPanel from './AdminPanel.jsx';
 import ActivityPresence from './ActivityPresence.jsx';
 import {attachBusiness,projectBusiness} from './business.js';
 import {cloudRequest} from './cloud-client.js';
@@ -16,7 +15,7 @@ function Dialog({title,children,onClose,busy}){
     <div className="row between"><h2>{title}</h2><button type="button" className="text" disabled={busy} onClick={onClose}>Close</button></div>{children}
   </dialog>;
 }
-export default function Dashboard({account,onOpen}){
+export default function Dashboard({account,onOpen,onAdmin}){
   const [businesses,setBusinesses]=useState([]),[businessId,setBusinessId]=useState(account.member.businessId||'luxus');
   useEffect(()=>{cloudRequest('businesses').then(r=>setBusinesses(r.businesses)).catch(e=>setError(e.message));},[]);
   const business=businesses.find(b=>b.id===businessId);
@@ -59,15 +58,15 @@ export default function Dashboard({account,onOpen}){
   const rows=projects.filter(p=>`${p.name} ${p.owner||''}`.toLowerCase().includes(search.toLowerCase()));
   const localRows=drafts.filter(d=>(account.member.admin||projectBusiness(d.document)===account.member.businessId)&&(d.dirty||!d.document.cloud)&&d.document.name.toLowerCase().includes(search.toLowerCase()));
   return <div className="workspace">
-    <header className="workspace-header"><div className="brand"><span className="brand-icon"><Box size={24}/></span><span>CODEX<span className="brand-light">KITCHEN</span><small>PROJECT WORKSPACE</small></span></div><div className="header-actions"><ThemeToggle/><UserMenu account={account}/></div></header>
+    <header className="workspace-header"><div className="brand"><span className="brand-icon"><Box size={24}/></span><span>CODEX<span className="brand-light">KITCHEN</span><small>PROJECT WORKSPACE</small></span></div><div className="header-actions">{account.member.admin&&<button className="primary compact" onClick={onAdmin}><ShieldCheck size={16}/>Admin</button>}<ThemeToggle/><UserMenu account={account}/></div></header>
     <main className="dashboard">
       <ActivityPresence/>
       <label className="field">Business for new projects, imports and copies<select value={businessId} disabled={!account.member.admin} onChange={e=>setBusinessId(e.target.value)}>{businesses.map(b=><option key={b.id} value={b.id}>{b.name}</option>)}</select></label>
       <div className="dashboard-heading"><div><p className="eyebrow">BUSINESS TRIAL · PROJECTS FIRST</p><h1>Your kitchen projects</h1><p>Start a new project or continue a saved design.</p></div><div className="row"><button className="secondary" disabled={busy} onClick={()=>importer.current.click()}><Upload size={17}/>Import JSON</button><button className="primary" disabled={busy} onClick={()=>{setName('');setError('');setModal({type:'new'});}}><Plus size={18}/>New project</button></div></div>
       <input ref={importer} type="file" accept=".json,application/json" hidden onChange={e=>{const f=e.target.files[0];e.target.value='';if(f)run(()=>importFile(f));}}/>
-      <nav className="workspace-tabs" aria-label="Workspace sections">{[['projects',account.member.admin?'All projects':'My projects'],['drafts','Local recovery'],['trash','Trash'],...(account.member.admin?[['admin','Users & activity']]:[])].map(([id,label])=><button key={id} className={tab===id?'active':''} aria-current={tab===id?'page':undefined} disabled={busy} onClick={()=>setTab(id)}>{label}</button>)}</nav>
+      <nav className="workspace-tabs" aria-label="Workspace sections">{[['projects',account.member.admin?'All projects':'My projects'],['drafts','Local recovery'],['trash','Trash']].map(([id,label])=><button key={id} className={tab===id?'active':''} aria-current={tab===id?'page':undefined} disabled={busy} onClick={()=>setTab(id)}>{label}</button>)}</nav>
       {error&&!modal&&<div role="alert" className="workspace-alert">{error}</div>}{notice&&<p role="status" className="workspace-notice">{notice}</p>}
-      {tab==='admin'?<section className="dashboard-admin"><AdminPanel onOpenProject={project=>openDocument(cloudDocument(project))}/></section>:<>
+      <>
         <div className="dashboard-toolbar"><label>Find a project<input type="search" placeholder="Search name or operator" value={search} onChange={e=>setSearch(e.target.value)}/></label><button className="secondary compact" disabled={busy||loading} onClick={()=>run(async()=>{localRefresh();if(tab!=='drafts')await refresh();})}>Refresh</button></div>
         {tab==='drafts'?<><p className="workspace-help">Recovery copies belong to this account on this browser. They are not cloud backups. Open one and choose Save project to sync it.</p><div className="project-grid">{localRows.map(d=><article className="project-card" key={d.id}><span className="project-status">Unsynced · this browser</span><h2>{d.document.name}</h2><p>{new Date(d.updatedAt).toLocaleString()}</p><button className="primary" disabled={busy} onClick={()=>run(async()=>openDocument(d.document,true))}>Resume draft</button></article>)}</div>{!localRows.length&&<div className="workspace-empty"><h2>No unsynced drafts</h2><p>Local recovery copies will appear here when needed.</p></div>}</>:<>
           {loading&&<p role="status">Loading projects…</p>}
@@ -84,7 +83,7 @@ export default function Dashboard({account,onOpen}){
           {!loading&&!rows.length&&<div className="workspace-empty"><FolderOpen size={36}/><h2>{search?'No matching projects':tab==='trash'?'Trash is empty':'No cloud projects yet'}</h2><p>{tab==='trash'?'Deleted projects will remain recoverable here.':'Choose New project or import an existing project JSON.'}</p></div>}
           {hasMore&&<button className="secondary" disabled={busy||loading} onClick={()=>run(()=>refresh(true))}>Load more projects</button>}
         </>}
-      </>}
+      </>
       <p className="workspace-footnote">Parallel business trial · Check dimensions, construction and quotations before issuing work to production.</p>
     </main>
     {modal&&<Dialog title={{new:'New kitchen project',rename:'Rename project',duplicate:'Duplicate project',trash:'Move project to Trash?',recover:'Unsynced work found'}[modal.type]} busy={busy} onClose={()=>{setModal(null);setError('');}}>

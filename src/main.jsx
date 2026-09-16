@@ -29,12 +29,14 @@ import {
   ChevronRight,
   MousePointer2,
   ReceiptText,
+  ShieldCheck,
 } from "lucide-react";
 import Scene from "./Scene";
 import AuthGate from './AuthGate.jsx';
 import UserMenu from './UserMenu.jsx';
 import ThemeToggle from './ThemeToggle.jsx';
 import Dashboard from './Dashboard.jsx';
+import AdminDashboard from './AdminDashboard.jsx';
 import ActivityPresence from './ActivityPresence.jsx';
 import BoxChooser from './BoxChooser.jsx';
 import LengthInput,{MeasurementProvider,MeasurementSwitch,checkLengthInputs} from './LengthInput.jsx';
@@ -263,7 +265,7 @@ function Plan({ p, plan, selected, onSelect, onMoveUnit, onMoveOpening, onMoveSt
     </svg>
   );
 }
-function App({account,initialDocument,initialDirty,onDashboard}) {
+function App({account,initialDocument,initialDirty,onDashboard,onAdmin}) {
   const [p, setP] = useState(initialDocument),
     [savedContent,setSavedContent]=useState(initialDirty?'':projectContent(initialDocument)),
     [saving,setSaving]=useState(false),
@@ -1350,6 +1352,7 @@ function App({account,initialDocument,initialDirty,onDashboard}) {
         </div>
         <div className="header-actions">
           <button className="secondary compact" disabled={saving} onClick={backToDashboard}><ArrowLeft size={16}/>Projects</button>
+          {account.member.admin&&<button className="primary compact" onClick={onAdmin}><ShieldCheck size={16}/><span>Admin</span></button>}
           <ThemeToggle/>
           <UserMenu account={account}/>
           <button className="primary compact" disabled={!!moveReview||!!changeApproval} onClick={()=>setCustomerQuoteOpen(true)} title="Create customer quotation"><ReceiptText size={16}/><span>Quote maker</span></button>
@@ -1794,7 +1797,9 @@ function App({account,initialDocument,initialDirty,onDashboard}) {
   );
 }
 function Workspace({account}){
-  const [active,setActive]=useState(null);
-  return active?<App key={projectIdentity(active.document)} account={account} initialDocument={active.document} initialDirty={active.dirty} onDashboard={()=>setActive(null)}/>:<Dashboard account={account} onOpen={setActive}/>;
+  const [active,setActive]=useState(null),[adminOpen,setAdminOpen]=useState(false);
+  const openProject=value=>{setAdminOpen(false);setActive(value);};
+  if(adminOpen&&account.member.admin)return <AdminDashboard account={account} onBack={()=>setAdminOpen(false)} onOpenProject={document=>openProject({document,dirty:false})}/>;
+  return active?<App key={projectIdentity(active.document)} account={account} initialDocument={active.document} initialDirty={active.dirty} onDashboard={()=>setActive(null)} onAdmin={()=>{setActive(null);setAdminOpen(true);}}/>:<Dashboard account={account} onOpen={openProject} onAdmin={()=>setAdminOpen(true)}/>;
 }
 createRoot(document.getElementById("root")).render(<MeasurementProvider><AuthGate>{account=><Workspace key={`${account.user.id}:${account.member.businessId}`} account={account}/>}</AuthGate></MeasurementProvider>);

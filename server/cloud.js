@@ -85,8 +85,8 @@ export default async function cloud(req,res){
       if(!member.admin)throw new HttpError(403,'Only the super-admin can edit staff.');
       const body=await readJson(req,8192),input=staffInput(body,method==='POST');
       const [prior]=method==='PATCH'?await db.select().from(members).where(eq(members.id,String(body.id))):[];
-      const businessId=body.businessId??prior?.businessId??'luxus',monthlyTarget=Number(body.monthlyTarget??prior?.monthlyTarget??0);
-      if(!BUSINESS_IDS.includes(businessId)||!Number.isInteger(monthlyTarget)||monthlyTarget<0||monthlyTarget>10000)throw new HttpError(400,'Choose a business and a valid monthly project target.');
+      const businessId=body.businessId??prior?.businessId??'luxus',monthlyTarget=Number(body.monthlyTarget??prior?.monthlyTarget??0),barTokens=Number(body.barTokens??prior?.barTokens??0);
+      if(!BUSINESS_IDS.includes(businessId)||!Number.isInteger(monthlyTarget)||monthlyTarget<0||monthlyTarget>10000||!Number.isInteger(barTokens)||barTokens<0||barTokens>1000000)throw new HttpError(400,'Choose a business, a valid monthly target and a valid whole-bar token allowance.');
       await loadBusiness(db,businessId);
       const [duplicate]=await db.select().from(members).where(eq(members.username,input.username));
       if(duplicate&&duplicate.id!==body.id)throw new HttpError(409,'This username is already in use.');
@@ -95,7 +95,7 @@ export default async function cloud(req,res){
         const created=await neonAdmin(req,'create-user',{email,password:input.password,name:input.name,role:'user'}),id=created.user?.id;
         if(!id)throw new HttpError(503,'Neon did not return the new account ID.');
         try{
-          const [saved]=await db.insert(members).values({id,email,username:input.username,name:input.name,status:input.status,requireEmailVerification:input.requireEmailVerification,businessId,monthlyTarget}).returning();
+          const [saved]=await db.insert(members).values({id,email,username:input.username,name:input.name,status:input.status,requireEmailVerification:input.requireEmailVerification,businessId,monthlyTarget,barTokens}).returning();
           await recordActivity(db,user,'staff_created',input.username);return json(res,201,{member:saved});
         }catch(error){await neonAdmin(req,'remove-user',{userId:id}).catch(()=>{});throw error;}
       }
@@ -108,7 +108,7 @@ export default async function cloud(req,res){
       await neonAdmin(req,'update-user',{userId:existing.id,data:{name:input.name,...(changedEmail?{email,emailVerified:false}:{})}});
       if(input.password)await neonAdmin(req,'set-user-password',{userId:existing.id,newPassword:input.password});
       if(input.password||changedEmail||input.status==='blocked')await neonAdmin(req,'revoke-user-sessions',{userId:existing.id});
-      const [saved]=await db.update(members).set({email,username:input.username,name:input.name,status:input.status,requireEmailVerification:input.requireEmailVerification,businessId,monthlyTarget,updatedAt:new Date()}).where(eq(members.id,existing.id)).returning();
+      const [saved]=await db.update(members).set({email,username:input.username,name:input.name,status:input.status,requireEmailVerification:input.requireEmailVerification,businessId,monthlyTarget,barTokens,updatedAt:new Date()}).where(eq(members.id,existing.id)).returning();
       await recordActivity(db,user,'staff_updated',input.username);return json(res,200,{member:saved});
     }
     if(op==='activity'){

@@ -11,6 +11,7 @@ export const members = kitchen.table('members', {
   username:text('username').unique(),name:text('name').notNull().default(''),requireEmailVerification:boolean('require_email_verification').notNull().default(false),
   businessId:text('business_id').notNull().default('luxus').references(()=>businesses.id),
   monthlyTarget:integer('monthly_target').notNull().default(0),
+  barTokens:integer('bar_tokens').notNull().default(0),
   createdAt:timestamp('created_at',{withTimezone:true}).notNull().defaultNow(),
   updatedAt:timestamp('updated_at',{withTimezone:true}).notNull().defaultNow(),
 });
