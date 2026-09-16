@@ -1,14 +1,14 @@
 import {createAuthClient} from '@neondatabase/neon-js/auth';
 import {put} from '@vercel/blob/client';
+import {fetchAccessToken} from './auth-token.js';
 
 const authUrl=typeof window!=='undefined'?new URL('/api/auth',window.location.origin).href:null;
 export const authClient=authUrl?createAuthClient(authUrl,{fetchOptions:{credentials:'include'}}):null;
 export async function cloudRequest(op,{method='GET',body,params={},raw=false}={}){
   if(!authClient)throw Error('Neon Auth is not configured.');
-  const result=await authClient.token();
-  if(result.error||!result.data?.token)throw Error('Sign in again. If blocked, allow this app domain in Neon Auth and allow its session cookie.');
+  const token=await fetchAccessToken();
   const response=await fetch(`/api/cloud?${new URLSearchParams({op,...params})}`,{
-    method,headers:{Authorization:`Bearer ${result.data.token}`,...(body?{'Content-Type':'application/json'}:{})},
+    method,headers:{Authorization:`Bearer ${token}`,...(body?{'Content-Type':'application/json'}:{})},
     body:body?JSON.stringify(body):undefined,cache:'no-store',
   });
   if(!response.ok){const data=await response.json().catch(()=>({}));throw Error(data.error||`Cloud request failed (${response.status}).`);}
