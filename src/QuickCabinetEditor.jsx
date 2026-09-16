@@ -3,6 +3,7 @@ import {X,Trash2,Move,SlidersHorizontal} from 'lucide-react';
 import LengthInput,{checkLengthInputs} from './LengthInput.jsx';
 import {TYPES,minimumCabinetWidth,maximumCabinetWidth} from './model.js';
 import './quick-cabinet.css';
+import {hoodType} from './hood.js';
 
 export default function QuickCabinetEditor({unit,anchor,project,issues,onEdit,onClose,onDelete,onMove,onMore,onFit}) {
   const ref=useRef(),[screen,setScreen]=useState(()=>({w:globalThis.innerWidth||1200,h:globalThis.innerHeight||800})),[dimensions,setDimensions]=useState({w:unit.w,h:unit.h});
@@ -19,6 +20,7 @@ export default function QuickCabinetEditor({unit,anchor,project,issues,onEdit,on
   return <section ref={ref} tabIndex={-1} role="dialog" aria-modal="false" aria-labelledby="quick-box-title" className="quick-cabinet" style={style}>
     <div className="quick-heading"><div><span className="eyebrow">{unit.id} · {unit.wall==='Island'?'ISLAND':`WALL ${unit.wall}`} · {unit.z>=900?'UPPER':'BASE / TALL'}</span><h3 id="quick-box-title">{TYPES[unit.type]?.name}</h3></div><button className="icon" aria-label="Close cabinet editor" onClick={close}><X size={18}/></button></div>
     <p className="quick-help">Changes update the design and estimate immediately.</p>
+    {unit.type==='cooker'&&<label className="field">Cooker hood<select value={hoodType(unit)} onChange={e=>onEdit('hoodType',e.target.value)}><option value="cassette">Cassette (default)</option><option value="column">Column / chimney</option></select><small>Style only; appliance cost and installation clearance require review.</small></label>}
     <div className="two">
       {field('Width','w',minimumCabinetWidth(unit),maximumCabinetWidth(unit),['sink','cooker'].includes(unit.type))}
       {field('Height','h',heightMin,heightMax)}

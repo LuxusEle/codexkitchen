@@ -1,5 +1,6 @@
 import { countertopPieces } from "./construction.js";
 import {RATE_DEFAULTS} from './business.js';
+import {materialPricingSettings, supplierBarRate, MATERIAL_FINISHES, MATERIAL_SUPPLIERS, MATERIAL_PRICE_DATE} from './material-prices.js';
 
 export const LKR_COST_DEFAULTS = {
   base: 15500,
@@ -57,31 +58,26 @@ export function costingSettings(p) {
     bomRates: { ...p.costing?.bomRates },
     bomQuantities: { ...p.costing?.bomQuantities },
     extras: Array.isArray(p.costing?.extras) ? p.costing.extras : [],
+    materialPricing: materialPricingSettings(p),
   };
 }
 
-function defaultBomRate(line, job) {
+function defaultBomRate(line, job, materialPricing) {
   if (line.category === "Bar stock") {
-    // 2026 Central Province BSR: 1 1/2 in square anodized 1.2 mm box bar
-    // LKR 1,130.69/m. Applied as a transparent proxy to all profiles until a
-    // supplier quote is entered; the actual stock length is read from the BOM.
-    const length = Number(line.item.match(/\/\s*([\d.]+)\s*$/)?.[1]) ||
-      (line.item.includes("HANDLE") ? job.settings.handleLength :
-        line.item.includes("SASH") ? job.settings.sashLength : job.settings.barLength);
-    return round((length / 1000) * 1130.69, 0);
+    return supplierBarRate(line, job, materialPricing);
   }
   if (line.category === "Sheet stock") {
     const size = line.item.match(/([\d.]+)\s*x\s*([\d.]+)\s*$/i);
     const area = size ? (Number(size[1]) * Number(size[2])) / 1e6 : 2.9768;
-    if (/glass/i.test(line.item)) return round(area * 7070, 0);
+    if (/glass/i.test(line.item)) return {rate:round(area * 7070, 0),status:'provisional',source:'Sri Lanka glass allowance'};
     // BOM quantity is already complete sheets. The provisional LKR 26,500
     // rate is per 2440 x 1220 sheet, not per square metre.
-    if (/ACP/i.test(line.item)) return 26500;
+    if (/ACP/i.test(line.item)) return {rate:26500,status:'provisional',source:'Editable ACP sheet allowance'};
   }
-  if (/hinge/i.test(line.item)) return 1000;
-  if (/drawer|pullout/i.test(line.item)) return 10000;
-  if (/lift/i.test(line.item)) return 15000;
-  return 0;
+  if (/hinge/i.test(line.item)) return {rate:1000,status:'provisional',source:'Editable hardware allowance'};
+  if (/drawer|pullout/i.test(line.item)) return {rate:10000,status:'provisional',source:'Editable hardware allowance'};
+  if (/lift/i.test(line.item)) return {rate:15000,status:'provisional',source:'Editable hardware allowance'};
+  return {rate:0,status:'unpriced',source:'Supplier quotation required'};
 }
 
 export function kitchenEstimate(p, plan, job) {
@@ -141,19 +137,27 @@ export function kitchenEstimate(p, plan, job) {
     const key = keyFor(line),
       quantity = Number.isFinite(cfg.bomQuantities[key])
         ? cfg.bomQuantities[key]
-        : Number(line.quantity) || 0,
-      rate = Number.isFinite(cfg.bomRates[key])
-        ? cfg.bomRates[key]
-        : defaultBomRate(line, job);
-    return { ...line, key, quantity, rate, total: round(quantity * rate) };
+        : Number(line.quantity) || 0;
+    const automatic = defaultBomRate(line, job, cfg.materialPricing);
+    const manual = Number.isFinite(cfg.bomRates[key]);
+    const rate = manual ? cfg.bomRates[key] : automatic.rate;
+    return {
+      ...line, key, quantity, rate, total: round(quantity * rate),
+      rateStatus: manual ? "manual" : automatic.status,
+      rateSource: manual ? "Manual project rate" : automatic.source,
+      rateWarning: manual ? "" : automatic.warning,
+    };
   });
+  const supplier = MATERIAL_SUPPLIERS[cfg.materialPricing.supplier];
+  const finish = MATERIAL_FINISHES[cfg.materialPricing.finish];
   return {
     sales,
     purchasing,
     salesTotal: round(sales.reduce((sum, line) => sum + line.total, 0)),
     purchasingTotal: round(purchasing.reduce((sum, line) => sum + line.total, 0)),
     sourceNote:
-      "Selling rates supplied for UAT. BOM defaults are editable Sri Lanka reference proxies: LKR 1,130.69/m for 1.5 in anodized box bar; LKR 26,500 per 2440 x 1220 3 mm ACP sheet; LKR 7,070/m² for 3 mm clear glass. Obtain supplier quotations before ordering.",
+      `Selling rates supplied for UAT. Aluminum reference: ${supplier.name} registered-dealer price list effective ${MATERIAL_PRICE_DATE}, ${finish} (${cfg.materialPricing.finish}), taxes as stated in that list. The matching ${supplier.frame.code} 1 1/2 x 1 in tube is published at ${supplier.frame.listedWall} mm, so the app's 1.2 mm frame rate is a visible thickness/length estimate, not a supplier quotation. Sash, handle, ACP, glass and hardware allowances remain provisional and editable. Confirm current stock, profile codes and quotations before ordering.`,
+    materialPricing: cfg.materialPricing,
   };
 }
 

@@ -44,7 +44,6 @@ export function customerQuotePdf(draft,images,logo) {
   heading('Your investment');amountRow('Consolidated package',q.totals.base);
   if(q.options.some(o=>o.selected))amountRow('Selected extras',q.totals.extras);
   keep(22);doc.setFillColor('#f0ece4');doc.rect(14,y-5,182,17,'F');text('QUOTATION TOTAL',18,y+5,11,true);text(money(q.totals.total),192,y+5,16,true,{align:'right'});y+=20;
-  paragraph(`Tax treatment: ${q.taxNote}`,9);
   heading('Included scope');paragraph(q.scope);
   heading('Exclusions / customer supply');paragraph(q.exclusions);
   if(q.options.length){

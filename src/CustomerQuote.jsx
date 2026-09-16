@@ -10,7 +10,7 @@ import './customer-quote.css';
 const fileData=blob=>new Promise((resolve,reject)=>{const reader=new FileReader();reader.onload=()=>resolve(reader.result);reader.onerror=()=>reject(Error('Could not read the company logo.'));reader.readAsDataURL(blob);});
 export default function CustomerQuote({project,plan,job,onSave,onClose}) {
   const estimate=useMemo(()=>kitchenEstimate(project,plan,job),[project,plan,job]);
-  const [draft,setDraft]=useState(()=>{const defaults=newCustomerQuote(project,estimate);return {...defaults,...project.customerQuote,brand:defaults.brand,businessId:defaults.businessId,businessRevision:defaults.businessRevision,options:Array.isArray(project.customerQuote?.options)?project.customerQuote.options.filter(o=>o&&typeof o==='object').map(o=>({...o,id:o.id||crypto.randomUUID()})):[]};});
+  const [draft,setDraft]=useState(()=>{const defaults=newCustomerQuote(project,estimate),saved={...project.customerQuote};delete saved.taxNote;return {...defaults,...saved,brand:defaults.brand,businessId:defaults.businessId,businessRevision:defaults.businessRevision,options:Array.isArray(project.customerQuote?.options)?project.customerQuote.options.filter(o=>o&&typeof o==='object').map(o=>({...o,id:o.id||crypto.randomUUID()})):[]};});
   const [images,setImages]=useState([]),[step,setStep]=useState(0),[busy,setBusy]=useState(false),[error,setError]=useState(''),[confirmed,setConfirmed]=useState(false),[result,setResult]=useState(null),[saved,setSaved]=useState(false);
   const dialog=useRef(),resultUrl=useRef(),initialFocus=useRef(),alive=useRef(true);
   const errors=quoteErrors(draft,images),totals=quoteTotals(draft);
@@ -63,7 +63,7 @@ export default function CustomerQuote({project,plan,job,onSave,onClose}) {
         <div className="cq-grid">{field('reference','Quotation reference')}{field('revision','Revision')}{field('date','Issue date','date')}{field('validUntil','Valid until','date')}{field('customer','Customer name')}{field('contact','Phone / email')}{field('subject','Project title')}</div>
         {area('address','Customer / site address',800)}
         <h3>Consolidated package price</h3><p>Starts from the current selling estimate. Check that it covers the scope and your job costs; no per-cabinet or material rates appear in the customer pack.</p>
-        <div className="cq-grid">{field('baseAmount','Package price (LKR)','number')}{field('taxNote','Tax treatment — e.g. included / excluded / not applicable','text',500)}</div>
+        <div className="cq-grid">{field('baseAmount','Package price (LKR)','number')}</div>
         <button className="secondary" onClick={()=>{if(window.confirm('Replace the package price with the current selling estimate? Ensure optional extras are not already included.'))edit('baseAmount',estimate.salesTotal);}}>Use current estimate: {money(estimate.salesTotal)}</button>
         {area('scope','Included scope — cabinets, finishes, worktops, installation and services actually included')}
         {area('exclusions','Excluded / customer-supplied items — write None if none',4000)}
@@ -72,13 +72,13 @@ export default function CustomerQuote({project,plan,job,onSave,onClose}) {
         <button className="secondary" disabled={draft.options.length>=12} onClick={()=>edit('options',[...draft.options,{id:crypto.randomUUID(),title:'',amount:'',selected:false}])}>Add optional extra</button>
       </>}
       {step===2&&<>
-        <h3>Conditions and payment</h3><p>The 85% advance and 30-day production wording comes from your examples. These are editable commercial drafts: the owner must approve terms, bank details and tax treatment before business use.</p>
+        <h3>Conditions and payment</h3><p>The 85% advance and 30-day production wording comes from your examples. These are editable commercial drafts: the owner must approve terms and bank details before business use.</p>
         <div className="cq-grid">{field('advancePercent','Advance (%)','number')}{field('payee','Account holder')}{field('bank','Bank')}{field('account','Account number')}</div>
         {area('paymentNote','Payment arrangement',1500)}{area('terms','Conditions — separate paragraphs become numbered clauses',14000)}
         <div className="cq-summary"><span>Customer total<strong>{Number.isFinite(totals.total)?money(totals.total):'Check amounts'}</strong></span><span>Advance<strong>{Number.isFinite(totals.advance)?money(totals.advance):'Check amounts'}</strong></span><span>Balance<strong>{Number.isFinite(totals.balance)?money(totals.balance):'Check amounts'}</strong></span></div>
         {!!issues.length&&<details open className="cq-warning"><summary>Internal review: {issues.length} checks (not printed)</summary><ul>{issues.map((issue,i)=><li key={i}>{issue}</li>)}</ul></details>}
         {!!errors.length&&<div className="cq-warning"><strong>Complete before generating:</strong><ul>{errors.map(e=><li key={e}>{e}</li>)}</ul></div>}
-        <label className="cq-confirm"><input type="checkbox" checked={confirmed} onChange={e=>setConfirmed(e.target.checked)}/> I have reviewed the customer, scope, options, selling price, tax treatment, payment details and conditions. Renders match this design; unresolved assumptions are disclosed in the scope/exclusions. This is not a fabrication release.</label>
+        <label className="cq-confirm"><input type="checkbox" checked={confirmed} onChange={e=>setConfirmed(e.target.checked)}/> I have reviewed the customer, scope, options, selling price, payment details and conditions. Renders match this design; unresolved assumptions are disclosed in the scope/exclusions. This is not a fabrication release.</label>
         <button className="primary" disabled={!!errors.length||!confirmed} onClick={generate}>Generate quotation PDF with images</button>
       </>}
     </fieldset>

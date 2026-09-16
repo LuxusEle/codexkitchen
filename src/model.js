@@ -275,6 +275,7 @@ export function validateUnits(p, units) {
     if(u.frontMaterial&&!['acp','glass'].includes(u.frontMaterial))errors.push(`Invalid front material for ${u.id}.`);
     if(u.frontColor&&!/^#[0-9a-f]{6}$/i.test(u.frontColor))errors.push(`Invalid front colour for ${u.id}.`);
     if(u.frontLayout&&!['doors',...(['base','cooker'].includes(u.type)?['drawers']:[]),...(u.z>=900?['open']:[])].includes(u.frontLayout))errors.push(`Invalid front arrangement for ${u.id}.`);
+    if(u.hoodType!==undefined&&(u.type!=='cooker'||!['cassette','column'].includes(u.hoodType)))errors.push(`Invalid hood style for ${u.id}.`);
     if(u.type==='cooker'&&Math.abs(u.w-TYPES.cooker.w)>.1)errors.push(`Cooker ${u.id} width is fixed at ${TYPES.cooker.w} mm; the hood follows the same width.`);
     if(u.type==='sink'&&Math.abs(u.w-TYPES.sink.w)>.1&&!u.widthAdjustmentApproved)errors.push(`Sink ${u.id} width is fixed at ${TYPES.sink.w} mm unless a minor space-resolver adjustment is approved.`);
     const accessWidth=u.w-(u.type==='corner'?625:u.type==='wallCorner'?375:0);
@@ -1013,7 +1014,8 @@ function missing(p, units) {
   );
 }
 export function renderingPrompt(p, plan) {
-  const units = plan.units
+  const hoodNotes=plan.units.filter(u=>u.type==='cooker').map(u=>`${u.id}: ${u.hoodType==='column'?'column/chimney cooker hood with exposed vertical chimney':'slim cassette cooker hood; no exposed vertical chimney'}. Preserve this hood style.`).join('\n');
+  const units = hoodNotes+'\n'+plan.units
     .map(
       (u) =>
         `${u.id}: ${TYPES[u.type].name}, ${u.wall === "Island" ? `${u.featureKind==='breakfast'?'breakfast bar':'island'} at ${Math.round(u.islandX??u.ix)},${Math.round(u.islandY??u.iy)} mm, rotation ${u.islandRotation||0}°` : `wall ${u.wall} at ${Math.round(u.x)} mm`}, W${Math.round(u.w)} × H${u.h} × D${u.d} mm, bottom ${u.z} mm; fronts ${u.frontLayout==='open'?'open shelves':u.type==='drawers'||u.frontLayout==='drawers'?'drawers':'doors'}, infill ${u.frontMaterial||(u.type==='glass'?'glass':'acp')}, colour ${u.frontColor||p.style.front}, divisions ${u.doorDivisions||'automatic'}`,

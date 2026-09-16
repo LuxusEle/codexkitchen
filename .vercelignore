@@ -6,4 +6,5 @@ tmp
 output
 test-results
 *.log
+*.pdf
 tests

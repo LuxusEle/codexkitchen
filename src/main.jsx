@@ -28,6 +28,7 @@ import {
   ExternalLink,
   ChevronRight,
   MousePointer2,
+  ReceiptText,
 } from "lucide-react";
 import Scene from "./Scene";
 import AuthGate from './AuthGate.jsx';
@@ -1110,6 +1111,7 @@ function App({account,initialDocument,initialDirty,onDashboard}) {
               )}
             </div>
             {['cooker','sink'].includes(unit.type)&&<p className="warning">{unit.type==='cooker'?'Cooker and hood width is fixed at 600 mm.':'Sink width is fixed at 800 mm. A last-resort ±50 mm change is available only through the space resolver approval window.'}</p>}
+            {unit.type==='cooker'&&<label className="field">Cooker hood<select value={unit.hoodType||'cassette'} onChange={e=>editUnit('hoodType',e.target.value)}><option value="cassette">Cassette (default)</option><option value="column">Column / chimney</option></select></label>}
             {!['filler','fridge','dishwasher','open'].includes(unit.type)&&<div className="two">
               {['base','cooker','wall','glass'].includes(unit.type)&&<label className="field">Front arrangement<select value={unit.frontLayout||'doors'} onChange={e=>editUnit('frontLayout',e.target.value)}><option value="doors">Doors</option>{unit.z>=900?<option value="open">Open shelves</option>:<option value="drawers">Drawers</option>}</select></label>}
               <label className="field">Door infill<select value={unit.frontMaterial||(unit.type==='glass'?'glass':'acp')} onChange={e=>editUnit('frontMaterial',e.target.value)}><option value="acp">ACP</option><option value="glass">Glass</option></select></label>
@@ -1350,6 +1352,7 @@ function App({account,initialDocument,initialDirty,onDashboard}) {
           <button className="secondary compact" disabled={saving} onClick={backToDashboard}><ArrowLeft size={16}/>Projects</button>
           <ThemeToggle/>
           <UserMenu account={account}/>
+          <button className="primary compact" disabled={!!moveReview||!!changeApproval} onClick={()=>setCustomerQuoteOpen(true)} title="Create customer quotation"><ReceiptText size={16}/><span>Quote maker</span></button>
           <button className="secondary compact" onClick={()=>setCloudOpen(v=>!v)}>Project files</button>
           <span className="saved">
             <CheckCircle2 size={14} />

@@ -23,7 +23,7 @@ export function newCustomerQuote(project, estimate, now = new Date()) {
   return {reference:`QT-DRAFT-${now.getTime().toString(36).toUpperCase()}`, revision:'01',
     date:dateOnly(now), validUntil:dateOnly(expiry), customer:'', address:'', contact:'',
     subject:project.name || 'Kitchen design proposal', scope:'', exclusions:'',
-    baseAmount:estimate.salesTotal, taxNote:'', options:[], terms:profile?profile.terms:DEFAULT_TERMS,
+    baseAmount:estimate.salesTotal, options:[], terms:profile?profile.terms:DEFAULT_TERMS,
     brand:{...brand},businessId:project.businessId||'luxus',businessRevision:profile?.revision||1,
     advancePercent:profile?.advancePercent??85, paymentNote:'Balance payable before production completion.',
     payee:brand.payee, bank:brand.bank, account:brand.account,
@@ -40,7 +40,7 @@ export function quoteTotals(draft) {
 export function quoteErrors(draft, images=[]) {
   const errors=[];
   if(draft.brand)for(const k of ['name','address','phone','email'])if(typeof draft.brand[k]!=='string'||!draft.brand[k].trim()||draft.brand[k].length>300)errors.push(`Complete the business ${k} in owner settings.`);
-  for(const [key,label,max] of [['reference','Quote reference',70],['revision','Revision',20],['customer','Customer name',150],['subject','Project title',200],['scope','Included scope',6000],['exclusions','Exclusions / customer supply (write None if none)',4000],['taxNote','Tax treatment',500],['terms','Conditions',14000],['paymentNote','Payment arrangement',1500],['payee','Account holder',200],['bank','Bank name',100],['account','Bank account',100]]) {
+  for(const [key,label,max] of [['reference','Quote reference',70],['revision','Revision',20],['customer','Customer name',150],['subject','Project title',200],['scope','Included scope',6000],['exclusions','Exclusions / customer supply (write None if none)',4000],['terms','Conditions',14000],['paymentNote','Payment arrangement',1500],['payee','Account holder',200],['bank','Bank name',100],['account','Bank account',100]]) {
     if(typeof draft[key]!=='string'||!draft[key].trim()||draft[key].length>max)errors.push(`${label} is required (maximum ${max} characters).`);
   }
   for(const key of ['address','contact'])if(typeof draft[key]!=='string'||draft[key].length>800)errors.push(`Invalid ${key}.`);
@@ -59,7 +59,7 @@ export function quoteErrors(draft, images=[]) {
 }
 export function publicQuote(draft, images) {
   const errors=quoteErrors(draft,images); if(errors.length)throw Error(errors.join('\n'));
-  const allowed=['reference','revision','date','validUntil','customer','address','contact','subject','scope','exclusions','taxNote','terms','paymentNote','payee','bank','account'];
+  const allowed=['reference','revision','date','validUntil','customer','address','contact','subject','scope','exclusions','terms','paymentNote','payee','bank','account'];
   const brand=draft.brand||BRAND;
   return {...Object.fromEntries(allowed.map(k=>[k,draft[k].trim()])),brand:Object.fromEntries(['name','address','phone','email'].map(k=>[k,brand[k]])),baseAmount:Number(draft.baseAmount),advancePercent:Number(draft.advancePercent),
     options:draft.options.map(o=>({title:o.title.trim(),amount:Number(o.amount),selected:o.selected})),totals:quoteTotals(draft)};

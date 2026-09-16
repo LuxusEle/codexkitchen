@@ -11,6 +11,7 @@ import { countertopPieces } from "./construction.js";
 import { carcassParts, frontSpecs, hingePositions } from "./assembly.js";
 import { SASH_PROFILE, HANDLE_PROFILE, doorBody } from "./sash-profile.js";
 import {cabinetAtPoint} from './cabinet-actions.js';
+import {hoodParts} from './hood.js';
 const mat = (color, metalness = 0, roughness = 0.65) =>
   new T.MeshStandardMaterial({ color, metalness, roughness });
 function box(g, w, h, d, x, y, z, m, name) {
@@ -391,8 +392,7 @@ function createUnit(root, p, u, settings, mats) {
         );
         g.add(burner);
       }
-      box(g, w, 65, 450, 0, 1550, 0, steel, "Hood");
-      box(g, 250, 450, 230, (w - 250) / 2, 1615, 0, steel, "Hood duct");
+      for(const part of hoodParts(u))box(g,part.w,part.h,part.d,part.x,part.y,part.z,steel,part.name);
     }
   }
   if (settings.selected === u.id) {

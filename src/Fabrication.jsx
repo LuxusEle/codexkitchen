@@ -12,6 +12,7 @@ import provenance from "../reference/fabrication/manifest.json";
 import { costingSettings, kitchenEstimate } from "./costing.js";
 import LengthInput from './LengthInput.jsx';
 import {quoteReviewIssues} from './quote-review.js';
+import {MATERIAL_FINISHES, MATERIAL_SUPPLIERS} from './material-prices.js';
 
 const fmt = (n) =>
   Number(n).toLocaleString(undefined, { maximumFractionDigits: 1 });
@@ -153,6 +154,11 @@ export function CostingControls({ p, plan, job, onChange }) {
     commit({ bomQuantities: { ...cfg.bomQuantities, [line.key]: Number(value) } });
   const bomRate = (line, value) =>
     commit({ bomRates: { ...cfg.bomRates, [line.key]: Number(value) } });
+  const setMaterialPricing=(patch)=>{
+    const next={...cfg.materialPricing,...patch};
+    if(patch.supplier&&!MATERIAL_SUPPLIERS[patch.supplier].finishes.includes(next.finish))next.finish='PC';
+    commit({materialPricing:next});
+  };
   const editExtra = (id, patch) =>
     commit({ extras: cfg.extras.map((line) => line.id === id ? { ...line, ...patch } : line) });
   async function exportCost() {
@@ -168,6 +174,19 @@ export function CostingControls({ p, plan, job, onChange }) {
       <p className="eyebrow">LKR PRICE CALCULATOR</p>
       <h2>Estimate & purchasing rates</h2>
       <p className="intro">Quantities are measured from this kitchen. Every quantity and rate below is editable.</p>
+      <div className="grid2">
+        <label className="field">Aluminum supplier
+          <select value={cfg.materialPricing.supplier} onChange={e=>setMaterialPricing({supplier:e.target.value})}>
+            {Object.entries(MATERIAL_SUPPLIERS).map(([id,s])=><option key={id} value={id}>{s.name} · 01 Apr 2026</option>)}
+          </select>
+        </label>
+        <label className="field">Aluminum finish
+          <select value={cfg.materialPricing.finish} onChange={e=>setMaterialPricing({finish:e.target.value})}>
+            {MATERIAL_SUPPLIERS[cfg.materialPricing.supplier].finishes.map(id=><option key={id} value={id}>{id} · {MATERIAL_FINISHES[id]}</option>)}
+          </select>
+        </label>
+      </div>
+      <div className="fab-note">The published 1½ × 1 in tube is 0.9 mm. CODEX keeps the designed 1.2 mm wall and shows its automatically scaled rate as an estimate. Enter a supplier quotation in the BOM rate field to replace it.</div>
       {!!reviewIssues.length&&<details className="fab-note"><summary>{reviewIssues.length} checks before committing the quote</summary><ul>{reviewIssues.map((issue,i)=><li key={i}>{issue}</li>)}</ul></details>}
       <div className="fab-table price-table">
         <table>
@@ -190,7 +209,7 @@ export function CostingControls({ p, plan, job, onChange }) {
         <div className="fab-table price-table"><table>
           <thead><tr><th>Stock / hardware</th><th>Qty</th><th>Unit</th><th>Rate (LKR)</th><th>Total</th></tr></thead>
           <tbody>{estimate.purchasing.map(line=><tr key={line.key}>
-            <td><strong>{line.item}</strong><small>{line.category}</small></td>
+            <td><strong>{line.item}</strong><small>{line.category} · {line.rateStatus}</small><small>{line.rateSource}</small>{line.rateWarning&&<small>{line.rateWarning}</small>}</td>
             <td><input aria-label={`${line.item} BOM quantity`} type="number" min="0" step="0.01" value={line.quantity} onChange={e=>bomQty(line,e.target.value)}/></td>
             <td>{line.unit}</td>
             <td><input aria-label={`${line.item} BOM rate`} type="number" min="0" step="1" value={line.rate} onChange={e=>bomRate(line,e.target.value)}/></td>
