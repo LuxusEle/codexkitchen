@@ -1,7 +1,7 @@
 import {createAuthClient} from '@neondatabase/neon-js/auth';
 import {put} from '@vercel/blob/client';
 
-const authUrl=import.meta.env.VITE_NEON_AUTH_URL;
+const authUrl=typeof window!=='undefined'?new URL('/api/auth',window.location.origin).href:null;
 export const authClient=authUrl?createAuthClient(authUrl,{fetchOptions:{credentials:'include'}}):null;
 export async function cloudRequest(op,{method='GET',body,params={},raw=false}={}){
   if(!authClient)throw Error('Neon Auth is not configured.');

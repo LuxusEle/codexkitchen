@@ -1,6 +1,22 @@
 # Vercel + Neon deployment
 
-The web app and `/api/cloud` run on Vercel. Neon provides Postgres and Auth. A **private** Vercel Blob store holds project attachments and render ZIPs. Local saving remains available independently.
+The web app and `/api/cloud` run on Vercel. Neon provides Postgres and Auth. A **private** Vercel Blob store holds project attachments and render ZIPs. The editor now requires an active staff login. Local drafts are isolated by user ID.
+
+## Username sign-in and super-admin
+
+The same-origin `/api/auth/*` proxy resolves a username to its Neon Auth identity. Passwords are checked by Neon; the app never stores passwords. Username-only staff receive an internal, non-deliverable Auth alias. Real email is required only when the administrator ticks **Require email verification**. That option blocks editor/cloud access until the current email is verified. Ordinary staff cannot create accounts or grant themselves admin privileges.
+
+`ADMIN_USER_ID` pins the super-admin to one immutable Neon user ID. The requested `asanke1` account is the super-admin; its configured email is also accepted as a login alias. The account also needs Neon's `admin` role for managed staff creation, password changes and session revocation. `scripts/bootstrap-admin.mjs` reads a password through hidden terminal input for explicit, one-time provisioning, without overwriting existing credentials. Never put passwords in commands or source.
+
+**Admin / All projects** exposes staff creation/editing/disabling, optional email verification, all saved cloud projects, and the most recent 200 recorded login/project/file/staff actions. Super-admin can open and edit any saved cloud project; operators retain owner-only access. Revision checking still prevents accidental concurrent overwrites. Local unsaved drafts and individual mouse movements are not streamed to the administrator; staff must save to Neon to share their work. Activity history is read-only.
+
+Set `APP_ORIGIN=https://codexkitchen.vercel.app` in production. Register that exact origin in Neon Auth; allow localhost for local UAT. Session cookies are proxied as host-only, HttpOnly, Secure, SameSite=Lax cookies. Username login attempts and verification requests are throttled in the shared database.
+
+## Login-alert email
+
+Set `LOGIN_ALERT_TO=luxuselemente@gmail.com`. Preferred: connect Resend's **free** plan and set server-only `RESEND_API_KEY` and `EMAIL_FROM` to an authorised sender. Resend terms/account approval and any sender-domain verification must be completed before mail is operational. Alternatively set `SMTP_USER` and `SMTP_APP_PASSWORD` for Gmail (the latter must be a Gmail App Password, not a normal password). Never put these in `VITE_` variables.
+
+Successful logins are recorded even if no email sender is configured. Email status stays **pending**, not "sent", on missing credentials or provider failure. The admin panel reports this and can retry up to ten pending alerts. No unattended retry scheduler is configured. Passwords and session tokens never appear in alert emails.
 
 ## Setup
 
@@ -17,8 +33,8 @@ The web app and `/api/cloud` run on Vercel. Neon provides Postgres and Auth. A *
 ## Accounts and access
 
 - Create the requested admin account through Neon Auth using its configured email. The password is entered at signup, not committed in source or supplied in deployment commands. Rotate any password previously shared in chat.
-- `operator1` can be a display name, but Neon email login needs a real email address. Choose at least 8 characters for the password; `123456` is not accepted by this UI. Register the operator, sign in once to create its pending membership, then approve it in the admin panel.
-- Approval gates cloud projects/files; the local planner still works offline. The API verifies signed, expiring Neon JWTs with issuer and audience checks on every user request. Owner filters apply to project/file reads and writes. Admin approval does **not** grant access to another user's project data.
+- Create `oporator1` (or another username) in **Admin / All projects**. Choose at least 8 characters for the password; `123456` is not accepted. Email can be left off.
+- Approval gates the editor and cloud projects/files. The API verifies signed, expiring Neon JWTs with issuer and audience checks on every user request. Owner filters apply to operators; the pinned super-admin can access all cloud projects/files as explicitly requested.
 - A blocked user cannot obtain new upload tokens or read/write cloud projects. An already-issued upload token remains valid until its short expiry; its file is still private.
 - Saved project revisions prevent silent overwrites from another device. On conflict, open the latest cloud version or save a new copy; local data is not discarded automatically.
 - Files upload directly to Blob, avoiding Vercel's request-body size limit. A server-side HEAD check verifies ownership metadata, exact path, size, content type and private storage before recording completion. Signed callbacks and an authenticated completion endpoint support hosted and local development.

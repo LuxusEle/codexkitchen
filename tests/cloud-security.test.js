@@ -22,9 +22,9 @@ test('Neon verifier checks signature, issuer, audience, expiration and banned st
   await assert.rejects(()=>new SignJWT({}).setProtectedHeader({alg:'EdDSA',kid:'test'}).setSubject('forged').setIssuer(origin).setAudience(origin).setIssuedAt().setExpirationTime('5m').sign(other.privateKey).then(verify));
 });
 test('Administrator requires the configured email AND verified email claim',()=>{
-  const before=process.env.ADMIN_EMAIL;process.env.ADMIN_EMAIL='owner@example.com';
+  const before=process.env.ADMIN_EMAIL,beforeId=process.env.ADMIN_USER_ID;delete process.env.ADMIN_USER_ID;process.env.ADMIN_EMAIL='owner@example.com';
   try{assert.equal(isAdmin({email:'owner@example.com',emailVerified:false}),false);assert.equal(isAdmin({email:'stranger@example.com',emailVerified:true}),false);assert.equal(isAdmin({email:'OWNER@example.com',emailVerified:true}),true);}
-  finally{if(before===undefined)delete process.env.ADMIN_EMAIL;else process.env.ADMIN_EMAIL=before;}
+  finally{if(before===undefined)delete process.env.ADMIN_EMAIL;else process.env.ADMIN_EMAIL=before;if(beforeId!==undefined)process.env.ADMIN_USER_ID=beforeId;}
 });
 test('Files restrict types, paths, sizes and ids',()=>{
   assert.equal(fileInput({name:'reference.png',contentType:'image/png',size:200}).name,'reference.png');

@@ -10,7 +10,7 @@ export function createTokenVerifier(baseUrl,keys){
   return async token=>{
     const {payload}=await jwtVerify(token,jwks,{issuer,audience:issuer,algorithms:['EdDSA'],requiredClaims:['exp','iat','sub']});
     if(typeof payload.sub!=='string'||!payload.sub||payload.sub.length>200||payload.banned===true)throw new HttpError(401,'Sign in again.');
-    return {id:payload.sub,email:typeof payload.email==='string'?payload.email:'',emailVerified:payload.emailVerified===true};
+    return {id:payload.sub,email:typeof payload.email==='string'?payload.email:'',emailVerified:payload.emailVerified===true,issuedAt:payload.iat};
   };
 }
 export async function authenticate(req){

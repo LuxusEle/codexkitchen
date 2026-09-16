@@ -30,6 +30,7 @@ import {
   MousePointer2,
 } from "lucide-react";
 import Scene from "./Scene";
+import AuthGate from './AuthGate.jsx';
 import { moveCabinetRun, movableRun, shuffleDesign, designSignature, placementErrors, saveDesignSlot, restoreDesignSlot } from './runPlacement.js';
 import {
   FabricationControls,
@@ -265,10 +266,11 @@ function Plan({ p, plan, selected, onSelect, onMoveUnit, onMoveOpening, onMoveSt
     </svg>
   );
 }
-function App() {
+function App({account}) {
+  const storageKey=`${KEY}:${account.user.id}`,projectsKey=`${PROJECTS_KEY}:${account.user.id}`;
   const [p, setP] = useState(() => {
       try {
-        return parseProject(localStorage.getItem(KEY));
+        return parseProject(localStorage.getItem(storageKey)||(account.member.admin?localStorage.getItem(KEY):null));
       } catch {
         return initialProject();
       }
@@ -299,7 +301,7 @@ function App() {
     [cloudOpen,setCloudOpen] = useState(false),
     [savedProjects, setSavedProjects] = useState(() => {
       try {
-        const value = JSON.parse(localStorage.getItem(PROJECTS_KEY) || "[]");
+        const value = JSON.parse(localStorage.getItem(projectsKey) || "[]");
         return Array.isArray(value) ? value : [];
       } catch {
         return [];
@@ -335,7 +337,7 @@ function App() {
     setP((old) => ({ ...old, style: { ...old.style, [k]: v } }));
   useEffect(() => {
     try {
-      localStorage.setItem(KEY, JSON.stringify(p));
+      localStorage.setItem(storageKey, JSON.stringify(p));
       setSaveState("Saved on this device");
     } catch {
       setSaveState("Storage full — save a project file");
@@ -471,7 +473,7 @@ function App() {
     const entry={id,name:project.name,updatedAt:new Date().toISOString(),project};
     const next=[entry,...savedProjects.filter(item=>item.id!==id)].slice(0,30);
     try{
-      localStorage.setItem(PROJECTS_KEY,JSON.stringify(next));
+      localStorage.setItem(projectsKey,JSON.stringify(next));
     }catch{
       setToast("Project storage is full. Download the JSON file instead.");
       return;
@@ -1337,7 +1339,7 @@ function App() {
           <b className="uat">UAT 1</b>
         </div>
         <div className="header-actions">
-          <button className="secondary compact" onClick={()=>setCloudOpen(v=>!v)}>Cloud / Sign in</button>
+          <button className="secondary compact" onClick={()=>setCloudOpen(v=>!v)}>{account.member.admin?'Admin / All projects':'My cloud projects'}</button>
           <span className="saved">
             <CheckCircle2 size={14} />
             {saveState}
@@ -1803,4 +1805,4 @@ function App() {
     </div>
   );
 }
-createRoot(document.getElementById("root")).render(<App />);
+createRoot(document.getElementById("root")).render(<AuthGate>{account=><App key={account.user.id} account={account}/>}</AuthGate>);
