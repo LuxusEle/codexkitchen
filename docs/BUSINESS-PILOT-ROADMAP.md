@@ -46,7 +46,8 @@ Readiness is demonstrated by real-project reconciliation, not a completion perce
 
 Staff selects Create customer quote -> uploads rendered JPG/PNG/WebP images ->
 reviews customer, package price, scope, optional extras and terms -> confirms ->
-downloads one PDF or a ZIP containing the PDF and lightly LUXUS-watermarked images.
+downloads one PDF containing the quotation and lightly LUXUS-watermarked images.
+User refinement: images must be embedded, with no separate images or ZIP output.
 Use the Luxus logo and business letterhead from the supplied quotes; do not commit
 source customer PDFs or their customer information. Do not include internal BOM,
 supplier rates, margin, auth data or project JSON in the customer pack.

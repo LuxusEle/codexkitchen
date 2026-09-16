@@ -76,6 +76,7 @@ import { download, copyText, preparePack, reminderICS } from "./exports";
 import "./style.css";
 import './theme.css';
 const CloudPanel=lazy(()=>import('./CloudPanel.jsx'));
+const CustomerQuote=lazy(()=>import('./CustomerQuote.jsx'));
 const STEPS = [
   ["Room", Ruler],
   ["Openings", PanelTop],
@@ -290,7 +291,8 @@ function App({account,initialDocument,initialDirty,onDashboard}) {
     [reviewEditing, setReviewEditing] = useState(false),
     [editableBoxes, setEditableBoxes] = useState([]),
     [planRow, setPlanRow] = useState('all'),
-    [cloudOpen,setCloudOpen] = useState(false);
+    [cloudOpen,setCloudOpen] = useState(false),
+    [customerQuoteOpen,setCustomerQuoteOpen] = useState(false);
   const dirty=projectContent(p)!==savedContent;
   const currentProject=useRef(p);currentProject.current=p;
   const scene = useRef(),
@@ -1319,6 +1321,8 @@ function App({account,initialDocument,initialDirty,onDashboard}) {
       <p className="eyebrow">06 / QUOTE REVIEW</p><h1>Design to estimate.</h1>
       <p className="intro">Review the customer estimate and purchasing rates on the right. Confirm site measurements, supplier prices and your business costs before committing a quote.</p>
       <button className="primary" onClick={openQuote}>Edit quote & BOM prices</button>
+      <button className="secondary" disabled={!!moveReview||!!changeApproval} onClick={()=>setCustomerQuoteOpen(true)}>Create customer quotation pack</button>
+      <p className="share-note">Upload rendered images, review one package price and options, then export one Luxus PDF with watermarked images embedded. Internal BOM is not included.</p>
       <details className="advanced-manufacturing"><summary>Advanced: cutting & frame preview</summary><FabricationControls
         p={p}
         job={fabrication}
@@ -1600,6 +1604,7 @@ function App({account,initialDocument,initialDirty,onDashboard}) {
               <details className="advanced-manufacturing"><summary>Advanced: nested cutting / fabrication preview</summary><FabricationResults job={fabrication} onSelect={setSelected} /></details>
             </div>
           )}
+          {step===6&&<button className="primary" disabled={!!moveReview||!!changeApproval} onClick={()=>setCustomerQuoteOpen(true)}>Create customer quotation pack</button>}
           <QuoteSummary project={p} plan={plan} job={fabrication} onOpen={openQuote}/>
           <div className="workspace-lower">
             <section className="plan-card">
@@ -1698,6 +1703,7 @@ function App({account,initialDocument,initialDirty,onDashboard}) {
         </section>
       </main>
       {unit&&quickAnchor&&!moveReview&&!changeApproval&&!gapFix&&<QuickCabinetEditor key={unit.id} unit={unit} anchor={quickAnchor} project={p} issues={plan.errors} onEdit={editUnit} onClose={()=>setQuickAnchor(null)} onDelete={deleteSelectedCabinet} onMove={()=>{setQuickAnchor(null);setDragEnabled(true);if(['door','run'].includes(mode))setMode('finished');setToast(`Move active: drag ${unit.id} in 3D or plan; review and OK the result.`);}} onMore={()=>{setQuickAnchor(null);setStep(4);setTimeout(()=>document.querySelector('.unit-editor')?.scrollIntoView({behavior:'smooth',block:'center'}),0);}} onFit={()=>{setQuickAnchor(null);runGapAudit();}}/>}
+      {customerQuoteOpen&&<Suspense fallback={<div className="cabinet-undo" role="status">Loading customer quotation builder…</div>}><CustomerQuote project={p} plan={plan} job={fabrication} onSave={customerQuote=>update({customerQuote})} onClose={()=>setCustomerQuoteOpen(false)}/></Suspense>}
       {canUndoCabinet(p,deleteUndo)&&<div className="cabinet-undo" role="status"><span>Removed {deleteUndo.label}</span><button className="primary compact" onClick={undoDeleteCabinet}>Undo</button><button className="text" onClick={()=>setDeleteUndo(null)}>Dismiss</button></div>}
       {gapFix&&(
         <div className="modal-backdrop" onMouseDown={()=>setGapFix(null)}>
