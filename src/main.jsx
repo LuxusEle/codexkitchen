@@ -34,6 +34,7 @@ import AuthGate from './AuthGate.jsx';
 import UserMenu from './UserMenu.jsx';
 import ThemeToggle from './ThemeToggle.jsx';
 import Dashboard from './Dashboard.jsx';
+import BoxChooser from './BoxChooser.jsx';
 import {cloudRequest} from './cloud-client.js';
 import {projectIdentity,projectContent,writeDraft,removeDraft,detachedProject} from './project-workspace.js';
 import {copyRenderPack,copyRenderImage,prepareClipboardSheet} from './render-clipboard.js';
@@ -47,6 +48,7 @@ import {
 import { fabricationPlan } from "./fabrication.js";
 import {
   initialProject,
+  roomErrors,
   solve,
   TYPES,
   CHECKS,
@@ -304,6 +306,7 @@ function App({account,initialDocument,initialDirty,onDashboard}) {
   const scene = useRef(),
     dragSession=useRef(),reviewRef=useRef(),shuffleSeed=useRef(1),shuffleSeen=useRef([]);
   const plan = useMemo(() => solve(p), [p]);
+  const roomProblems = useMemo(() => roomErrors(p), [p]);
   const displayProject=useMemo(()=>moveReview?{...p,...moveReview.projectPatch,units:moveReview.units}:p,[p,moveReview]);
   const displayPlan=useMemo(()=>moveReview?solve(displayProject):plan,[displayProject,plan,moveReview]);
   const previewIds=useMemo(()=>moveReview?moveReview.units.filter(u=>{
@@ -1100,9 +1103,10 @@ function App({account,initialDocument,initialDirty,onDashboard}) {
             </div>
             {['cooker','sink'].includes(unit.type)&&<p className="warning">{unit.type==='cooker'?'Cooker and hood width is fixed at 600 mm.':'Sink width is fixed at 800 mm. A last-resort ±50 mm change is available only through the space resolver approval window.'}</p>}
             {!['filler','fridge','dishwasher','open'].includes(unit.type)&&<div className="two">
+              {['base','cooker','wall','glass'].includes(unit.type)&&<label className="field">Front arrangement<select value={unit.frontLayout||'doors'} onChange={e=>editUnit('frontLayout',e.target.value)}><option value="doors">Doors</option>{unit.z>=900?<option value="open">Open shelves</option>:<option value="drawers">Drawers</option>}</select></label>}
               <label className="field">Door infill<select value={unit.frontMaterial||(unit.type==='glass'?'glass':'acp')} onChange={e=>editUnit('frontMaterial',e.target.value)}><option value="acp">ACP</option><option value="glass">Glass</option></select></label>
               <label className="field">Front colour / glass tint<input type="color" value={unit.frontColor||p.style.front} onChange={e=>editUnit('frontColor',e.target.value)}/></label>
-              {!['spice','bottle','waste','oven'].includes(unit.type)&&<label className="field">{unit.type==='drawers'?'Drawer divisions':'Door divisions'}<select value={unit.doorDivisions||0} onChange={e=>editUnit('doorDivisions',Number(e.target.value))}><option value="0">Automatic</option>{[1,2,3,4,5,6].map(n=><option key={n} value={n}>{n}</option>)}</select></label>}
+              {!['spice','bottle','waste','oven'].includes(unit.type)&&<label className="field">{unit.type==='drawers'||unit.frontLayout==='drawers'?'Drawer divisions':'Door divisions'}<select disabled={unit.frontLayout==='open'} value={unit.doorDivisions||0} onChange={e=>editUnit('doorDivisions',Number(e.target.value))}><option value="0">Automatic</option>{[1,2,3,4,5,6].map(n=><option key={n} value={n}>{n}</option>)}</select></label>}
               <p className="muted">Spice pullouts: 150–250 mm. Other cabinets: minimum 300 mm. Narrow fillers are closure strips, not cabinet boxes.</p>
             </div>}
             <button
@@ -1414,6 +1418,8 @@ function App({account,initialDocument,initialDirty,onDashboard}) {
               {p.style.mode} aluminum
             </div>
           </div>
+          {roomProblems.length>0&&<div className="room-blocker" role="alert"><strong>Room / opening measurements are stopping cabinet generation</strong><ul>{roomProblems.map((problem,i)=><li key={i}>{problem}</li>)}</ul><button className="secondary compact" onClick={()=>setStep(1)}>Check openings</button><p>Resizing the room does not resize a measured door or window. Correct its wall, offset or size; your cabinet requirements are kept.</p></div>}
+          <BoxChooser p={p} plan={plan} selected={selected} onSelect={id=>{setSelected(id);setStep(4);}} disabled={!!moveReview||!!changeApproval||!!gapFix} onApply={patch=>{update(patch);setSelected(null);setToast('Box choices applied. Review the 3D design, then save your project.');}}/>
           <div className="design-variants" aria-label="Design alternatives">
             <button className="secondary compact" onClick={shuffle} disabled={!!moveReview&&moveReview.kind!=='shuffle'}><Sparkles size={15}/>Shuffle design</button>
             <span className="variant-help">Keep up to four designs</span>

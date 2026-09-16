@@ -310,7 +310,7 @@ test('Space audit excludes room openings and all current automatic arrangements 
   assert.ok(result.units.every(u=>u.x+u.w<=975+.1||u.x>=1925-.1));
 });
 test('Specialist insertion replaces free automatic bays, never stacks at occupied A/25',()=>{
-  const p=initialProject();p.room.width=4200;p.room.depth=3700;
+  const p=initialProject();p.needs.oven=1;p.needs.fridge=1;p.room.width=4200;p.room.depth=3700;
   const original=solve(p).units,snapshot=JSON.stringify(original);
   for(const type of ['spice','bottle','waste','drawers']){
     const r=insertCabinet(p,original,type);assert.ok(!r.error,r.error);

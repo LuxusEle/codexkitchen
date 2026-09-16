@@ -281,7 +281,7 @@ export function fabricationPlan(p, plan) {
           id: `${f.id}-DRAWER`,
           unitId: u.id,
           item:
-            u.type === "drawers"
+            u.type === "drawers" || u.frontLayout==='drawers'
               ? "Drawer box + runner pair"
               : `${u.type} pullout assembly`,
           qty: 1,

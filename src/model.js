@@ -44,6 +44,34 @@ TYPES.wallCorner = {
 };
 // Lift fronts share the same top datum as the rest of the upper row.
 TYPES.lift.z = 1670;
+export const BOX_TYPES = ['sink','cooker','drawers','spice','bottle','waste','dishwasher','base','oven','pantry','fridge','wall','glass','lift'];
+export const FIXED_WIDTH_TYPES = ['sink','cooker','dishwasher','oven','fridge'];
+export function cabinetDefaults(p, type) {
+  const t = TYPES[type], custom = p.unitDefaults?.[type] || {};
+  if (!t) return null;
+  const inheritedHeight=type==='corner'?p.unitDefaults?.base?.h:type==='wallCorner'?p.unitDefaults?.wall?.h:undefined;
+  return {...t, w: FIXED_WIDTH_TYPES.includes(type) ? t.w : (custom.w ?? t.w),
+    h: custom.h ?? inheritedHeight ?? t.h, doorDivisions: custom.doorDivisions ?? 0,
+    frontLayout: custom.frontLayout || 'doors'};
+}
+export function cabinetBriefErrors(p) {
+  const errors=[];
+  for(const [type,count] of Object.entries(p.needs||{}))if(!TYPES[type]||!Number.isInteger(count)||count<0||count>(type==='base'?24:12))errors.push('Box quantities must be whole numbers from 0 to 12 (base storage: 24).');
+  if(p.boxCounts!==undefined&&(!p.boxCounts||typeof p.boxCounts!=='object'||Array.isArray(p.boxCounts)||Object.entries(p.boxCounts).some(([t,n])=>!BOX_TYPES.includes(t)||!Number.isInteger(n)||n<0||n>(t==='base'?24:12))))errors.push('Invalid remembered box quantities.');
+  if(p.upperWalls!==undefined&&(!Array.isArray(p.upperWalls)||p.upperWalls.some(w=>!['A','B','C','D'].includes(w))))errors.push('Choose valid walls for upper cabinets.');
+  if(p.unitDefaults!==undefined&&(!p.unitDefaults||typeof p.unitDefaults!=='object'||Array.isArray(p.unitDefaults)))return [...errors,'Invalid box defaults.'];
+  for(const [type,c] of Object.entries(p.unitDefaults||{})) {
+    if(!BOX_TYPES.includes(type)||!c||typeof c!=='object'||Array.isArray(c)){errors.push('Invalid box defaults.');continue;}
+    const t=TYPES[type],name=t.name;
+    if(c.w!==undefined&&(!Number.isFinite(c.w)||c.w<minimumCabinetWidth({type})||c.w>maximumCabinetWidth({type})))errors.push(`${name}: width is outside the allowed range.`);
+    if(FIXED_WIDTH_TYPES.includes(type)&&c.w!==undefined&&Math.abs(c.w-t.w)>.1)errors.push(`${name}: appliance width is fixed at ${t.w} mm.`);
+    const min=t.z?200:type==='oven'?1800:t.h>1000?1600:600,max=t.z?1200:t.h>1000?3000:900;
+    if(c.h!==undefined&&(!Number.isFinite(c.h)||c.h<min||c.h>max))errors.push(`${name}: height must be ${min}–${max} mm.`);
+    if(c.doorDivisions!==undefined&&(!Number.isInteger(c.doorDivisions)||c.doorDivisions<0||c.doorDivisions>6))errors.push(`${name}: choose 1–6 divisions or automatic.`);
+    if(c.frontLayout!==undefined&&!['doors',...(['base','cooker'].includes(type)?['drawers']:[]),...(['wall','glass'].includes(type)?['open']:[])].includes(c.frontLayout))errors.push(`${name}: invalid front arrangement.`);
+  }
+  return errors;
+}
 export function initialProject() {
   return {
     version: 1,
@@ -77,8 +105,9 @@ export function initialProject() {
       cooker: 1,
       drawers: 1,
       spice: 1,
-      oven: 1,
-      fridge: 1,
+      oven: 0,
+      pantry: 0,
+      fridge: 0,
       wall: 3,
       glass: 1,
     },
@@ -181,7 +210,7 @@ export function roomErrors(p) {
       o.x + o.w > wallLength(p.room, o.wall) + 0.1 ||
       o.sill + o.h > p.room.height + 0.1
     )
-      e.push(`${o.kind} on wall ${o.wall} must fit within the wall.`);
+      e.push(`${o.kind} on wall ${o.wall} must fit within the wall. Offset ${o.x} + width ${o.w} = ${o.x+o.w} mm; wall length ${wallLength(p.room,o.wall)} mm. Check its height and sill too.`);
   }
   p.openings.forEach((o, i) =>
     p.openings.slice(i + 1).forEach((q) => {
@@ -245,10 +274,13 @@ export function validateUnits(p, units) {
     if(u.doorDivisions!==undefined&&u.doorDivisions!==0&&(!Number.isInteger(u.doorDivisions)||u.doorDivisions<1||u.doorDivisions>6))errors.push(`Invalid door divisions for ${u.id}.`);
     if(u.frontMaterial&&!['acp','glass'].includes(u.frontMaterial))errors.push(`Invalid front material for ${u.id}.`);
     if(u.frontColor&&!/^#[0-9a-f]{6}$/i.test(u.frontColor))errors.push(`Invalid front colour for ${u.id}.`);
+    if(u.frontLayout&&!['doors',...(['base','cooker'].includes(u.type)?['drawers']:[]),...(u.z>=900?['open']:[])].includes(u.frontLayout))errors.push(`Invalid front arrangement for ${u.id}.`);
     if(u.type==='cooker'&&Math.abs(u.w-TYPES.cooker.w)>.1)errors.push(`Cooker ${u.id} width is fixed at ${TYPES.cooker.w} mm; the hood follows the same width.`);
     if(u.type==='sink'&&Math.abs(u.w-TYPES.sink.w)>.1&&!u.widthAdjustmentApproved)errors.push(`Sink ${u.id} width is fixed at ${TYPES.sink.w} mm unless a minor space-resolver adjustment is approved.`);
     const accessWidth=u.w-(u.type==='corner'?625:u.type==='wallCorner'?375:0);
-    if(u.doorDivisions>0&&u.type!=='drawers'&&(accessWidth/u.doorDivisions-3)<=90)errors.push(`Door divisions for ${u.id} leave a leaf too narrow for the 45 mm sash.`);
+    if(u.doorDivisions>0&&u.type!=='drawers'&&u.frontLayout!=='drawers'&&u.frontLayout!=='open'&&(accessWidth/u.doorDivisions-3)<=90)errors.push(`Door divisions for ${u.id} leave a leaf too narrow for the 45 mm sash.`);
+    if((u.type==='drawers'||u.frontLayout==='drawers')&&(u.h-44-((u.doorDivisions||3)-1)*3)/(u.doorDivisions||3)<=122)errors.push(`Drawer divisions for ${u.id} leave a front too short for the sash and handle.`);
+    if(u.type==='oven'&&u.h<1800)errors.push(`Oven tower ${u.id} needs at least 1800 mm height for its appliance and front divisions.`);
     let f = footprint(p, u);
     if (
       f[0] < -0.1 ||
@@ -295,7 +327,7 @@ export function closeLegacyBaseUnits(p){
 }
 export function solve(p) {
   p=closeLegacyBaseUnits(p);
-  const errors = roomErrors(p);
+  const errors = [...roomErrors(p),...cabinetBriefErrors(p)];
   if (errors.length) return { units: [], errors, unmet: [], warnings: [] };
   if (p.units) {
     const gaps = auditRunGaps(p, p.units);
@@ -314,7 +346,7 @@ export function solve(p) {
     unmet = [];
   let n = 0;
   const add = (type, wall, x, w, extra = {}) => {
-    const t = TYPES[type],
+    const t = cabinetDefaults(p,type),
       u = {
         id: `K${String(++n).padStart(2, "0")}`,
         type,
@@ -324,6 +356,8 @@ export function solve(p) {
         h: t.h,
         d: t.d,
         z: t.z || 0,
+        doorDivisions: t.doorDivisions,
+        frontLayout: t.frontLayout,
         ...extra,
       };
     units.push(u);
@@ -361,7 +395,7 @@ export function solve(p) {
     reserve.D[1] = p.room.depth - 675;
   }
   function spaces(wall, type) {
-    let t = TYPES[type],
+    let t = cabinetDefaults(p,type),
       upper = (t.z || 0) > 900,
       sp = upper ? legalRunSpans(p, units, wall, true) : [reserve[wall]];
     for (const b of blocked(p, wall, t.z || 0, t.h, type)) sp = subtract(sp, b);
@@ -390,7 +424,7 @@ export function solve(p) {
   const placeRequested = (order) => { for (const type of order) {
     if (type === "wall") addUpperCorners(p, units, add);
     for (let j = 0; j < (p.needs[type] || 0); j++) {
-      const t = TYPES[type],
+      const t = cabinetDefaults(p,type),
         preferred = p.preferences[type],
         choices = preferred ? walls.filter((w) => w === preferred) : [...walls];
       let candidates = [];
@@ -412,13 +446,17 @@ export function solve(p) {
             continue;
           }
           if(type==='cooker'){
-            x=a+(b-a-t.w)/2;
-            const domain=legalRunSpans(p,units,wall,false).find(([da,db])=>x>=da-.1&&x+t.w<=db+.1);
-            if(!domain||x-domain[0]<300-.1||domain[1]-(x+t.w)<300-.1)continue;
-            const sink=units.find(u=>u.type==='sink'&&u.wall===wall),runMiddle=(domain[0]+domain[1])/2;
-            score+=Math.abs(x+t.w/2-runMiddle)/1000+(wall==='B'?-1.5:0);
-            if(sink&&Math.abs((x+t.w/2)-(sink.x+sink.w/2))<600)score+=5;
-            candidates.push({wall,x,w:t.w,score});
+            // Intersect free space with the safe landing-space range. Testing
+            // only the free span's midpoint falsely rejected short L runs.
+            for(const domain of legalRunSpans(p,units,wall,false)) {
+              const lo=Math.max(a,domain[0]+300),hi=Math.min(b-t.w,domain[1]-t.w-300);
+              if(lo>hi+.1)continue;
+              x=Math.max(lo,Math.min(hi,a+(b-a-t.w)/2));
+              const sink=units.find(u=>u.type==='sink'&&u.wall===wall),runMiddle=(domain[0]+domain[1])/2;
+              let cookerScore=score+Math.abs(x+t.w/2-runMiddle)/1000+(wall==='B'?-1.5:0);
+              if(sink&&Math.abs((x+t.w/2)-(sink.x+sink.w/2))<600)cookerScore+=5;
+              candidates.push({wall,x,w:t.w,score:cookerScore});
+            }
             continue;
           }
           if (type === "sink") {
@@ -484,6 +522,14 @@ export function solve(p) {
 const upperWanted = (p,units=[]) =>
   ["wall", "glass", "lift"].some((t) => (p.needs[t] || 0) > 0)||units.some(u=>u.z>=900);
 const isUpper = (u) => u.z >= 900;
+function rowEnvelope(p,units,wall,upper) {
+  if(!p.unitDefaults||!Object.keys(p.unitDefaults).length)return {z:upper?1450:0,h:upper?720:850,d:upper?350:600};
+  const type=upper?'wall':'base',t=cabinetDefaults(p,type),z=upper?1450:0;
+  const requested=BOX_TYPES.filter(key=>p.needs[key]>0&&!!TYPES[key].z===upper&&(!p.preferences[key]||p.preferences[key]===wall)).map(key=>cabinetDefaults(p,key)).filter(c=>upper||c.h<1000);
+  const placed=units.filter(u=>u.wall===wall&&isUpper(u)===upper&&(upper||u.h<1000));
+  const top=Math.max(z+t.h,...requested.map(c=>(c.z||0)+c.h),...placed.map(u=>u.z+u.h));
+  return {z,h:top-z,d:upper?350:600};
+}
 function upperBlockers(p, units, wall) {
   return units
     .filter((u) => u.wall === wall && u.type === "cooker")
@@ -492,9 +538,8 @@ function upperBlockers(p, units, wall) {
 // Legal span domains are shared by filling and auditing. Openings and occupied
 // perpendicular footprints are explicit exclusions, not unexplained gaps.
 export function legalRunSpans(p, units, wall, upper) {
-  const z = upper ? 1450 : 0,
-    h = upper ? 720 : 850,
-    d = upper ? 350 : 600;
+  if(upper&&p.upperWalls&&!p.upperWalls.includes(wall))return [];
+  const {z,h,d}=rowEnvelope(p,units,wall,upper);
   let spans = [[0, wallLength(p.room, wall)]];
   for (const b of blocked(p, wall, z, h, upper ? "wall" : "base"))
     spans = subtract(spans, b);
@@ -527,8 +572,10 @@ export function legalRunSpans(p, units, wall, upper) {
 }
 function addUpperCorners(p, units, add) {
   if (!upperWanted(p) || !["L", "U"].includes(p.room.layout)) return;
+  if(p.upperWalls&&!p.upperWalls.includes('A'))return;
   for (const hand of p.room.layout==='U' ? ["right", "left"] : ["right"]) {
-    const t = TYPES.wallCorner,
+    if(p.upperWalls&&!p.upperWalls.includes(hand==='right'?'B':'D'))continue;
+    const t = cabinetDefaults(p,'wallCorner'),
       x = hand === "right" ? p.room.width - t.w : 0;
     if (units.some((u) => u.type === "wallCorner" && u.hand === hand)) continue;
     const u = {
@@ -554,8 +601,7 @@ function addUpperCorners(p, units, add) {
 }
 function rowGaps(p, units, wall, upper) {
   let spans = legalRunSpans(p, units, wall, upper);
-  const z = upper ? 1450 : 0,
-    h = upper ? 720 : 850;
+  const {z,h}=rowEnvelope(p,units,wall,upper);
   for (const u of units.filter(
     (u) => u.wall === wall && overlap([u.z, u.z + u.h], [z, z + h]),
   ))
@@ -664,7 +710,7 @@ function fillRunGaps(p, units, add, automatic=false, rows=[false,true]) {
             neighbors.find((u) =>
               ["fridge", "oven", "pantry"].includes(u.type),
             ) || neighbors[0];
-          const h = upper ? 720 : neighbor?.h || 850,
+          const h = neighbor?.h || cabinetDefaults(p,upper?'wall':'base').h,
             d = neighbor?.d || (upper ? 350 : 600);
           add("filler", wall, a, width, {
             z,
@@ -714,7 +760,7 @@ function normalizeStraightBaseRuns(p,units){
     while(storage.length<requiredStorage){
       let suffix=1,id;
       do{id=`AUTO-BASE-${wall}-${suffix++}`}while(units.some(u=>u.id===id));
-      const added={id,type:'base',wall,x:a,w:600,h:TYPES.base.h,d:TYPES.base.d,z:0,automatic:true};
+      const t=cabinetDefaults(p,'base'),added={id,type:'base',wall,x:a,w:t.w,h:t.h,d:t.d,z:0,doorDivisions:t.doorDivisions,frontLayout:t.frontLayout,automatic:true};
       units.push(added);row.push(added);body.push(added);storage.push(added);changed=true;
     }
     if((!storage.length&&Math.abs(storageWidth)>.1)||storageWidth<storage.length*300-.1||storageWidth>storage.length*1200+.1){units.splice(0,units.length,...snapshot);return false;}
@@ -730,9 +776,10 @@ function normalizeStraightBaseRuns(p,units){
       let cursor=a;const placement=new Map(),sequence=[...left,...order,...right];
       for(const u of sequence){const w=u.type==='base'?each:u.w;placement.set(u.id,{x:cursor,w});cursor+=w;}
       if(Math.abs(cursor-b)>.1)continue;
+      const score=sequence.reduce((sum,u)=>sum+Math.abs(placement.get(u.id).x-u.x)*(u.type==='base'?1:5),0);
+      if(best&&score>=best.score)continue;
       const candidate=units.map(u=>placement.has(u.id)?{...u,...placement.get(u.id)}:{...u});
       if(validateUnits(p,candidate).length)continue;
-      const score=sequence.reduce((sum,u)=>sum+Math.abs(placement.get(u.id).x-u.x)*(u.type==='base'?1:5),0);
       if(!best||score<best.score)best={score,placement};
     }
     if(!best){units.splice(0,units.length,...snapshot);return false;}
@@ -758,6 +805,7 @@ export function auditCabinetSpace(p,units){
   return {rows,gaps,errors:conflicts,complete:gaps.length===0&&conflicts.length===0};
 }
 export function widthAdjustmentPolicy(u){
+  if(u.frontLayout==='drawers'&&u.type==='base')return {priority:3,label:'Drawers — adjust after door units',min:300,max:1200};
   if(['base','wall','glass','open','waste','pantry','lift'].includes(u.type))
     return {priority:1,label:'Flexible door unit',min:minimumCabinetWidth(u),max:1200};
   if(u.type==='spice')return {priority:2,label:'Spice pullout 150–250 mm',min:150,max:250};
@@ -896,8 +944,8 @@ export function repairCabinetSpace(p, existing) {
       id = `G${String(++i).padStart(3, "0")}`;
     } while (used.has(id));
     used.add(id);
-    const t = TYPES[type];
-    const u = { id, type, wall, x, w, h: t.h, d: t.d, z: t.z || 0, ...extra };
+    const t = cabinetDefaults(p,type);
+    const u = { id, type, wall, x, w, h: t.h, d: t.d, z: t.z || 0, doorDivisions:t.doorDivisions,frontLayout:t.frontLayout,...extra };
     units.push(u);
     return u;
   };
@@ -907,7 +955,7 @@ export function repairCabinetSpace(p, existing) {
 }
 export function closeRunGaps(p,existing){return repairCabinetSpace(p,existing).units;}
 export function insertCabinet(p,existing,type){
-  const t=TYPES[type];
+  const t=cabinetDefaults(p,type);
   if(type==='open')return {error:'Open base cabinets are not allowed. Choose closed base storage.'};
   if(!t||['corner','wallCorner','filler'].includes(type))return {error:'Use the layout/corner controls for this part.'};
   let n=1;while(existing.some(u=>u.id===`M${n}`))n++;
@@ -915,12 +963,13 @@ export function insertCabinet(p,existing,type){
   const replaceable=u=>u.automatic&&adjustableStorage.has(u.type)&&u.wall!=='Island';
   const baseline=new Set(validateUnits(p,existing));
   for(const wall of activeWalls(p.room.layout).filter(w=>!p.preferences[type]||p.preferences[type]===w)){
+    if(z>=900&&p.upperWalls&&!p.upperWalls.includes(wall))continue;
     let spans=[[0,wallLength(p.room,wall)]];
     for(const cut of blocked(p,wall,z,t.h,type))spans=subtract(spans,cut);
     for(const u of existing.filter(u=>u.wall===wall&&!replaceable(u)&&overlap([u.z,u.z+u.h],[z,z+t.h])))spans=subtract(spans,[u.x,u.x+u.w]);
     for(const [a,b] of spans.filter(([a,b])=>b-a>=t.w-.1)){
       for(const x of [...new Set([a,b-t.w])]){
-        const unit={id,type,wall,x,z,w:t.w,h:t.h,d:t.d};
+        const unit={id,type,wall,x,z,w:t.w,h:t.h,d:t.d,doorDivisions:t.doorDivisions,frontLayout:t.frontLayout};
         const candidate=[];
         let seq=0;
         for(const u of existing){
@@ -967,7 +1016,7 @@ export function renderingPrompt(p, plan) {
   const units = plan.units
     .map(
       (u) =>
-        `${u.id}: ${TYPES[u.type].name}, ${u.wall === "Island" ? `${u.featureKind==='breakfast'?'breakfast bar':'island'} at ${Math.round(u.islandX??u.ix)},${Math.round(u.islandY??u.iy)} mm, rotation ${u.islandRotation||0}°` : `wall ${u.wall} at ${Math.round(u.x)} mm`}, W${Math.round(u.w)} × H${u.h} × D${u.d} mm, bottom ${u.z} mm; infill ${u.frontMaterial||(u.type==='glass'?'glass':'acp')}, colour ${u.frontColor||p.style.front}, divisions ${u.doorDivisions||'automatic'}`,
+        `${u.id}: ${TYPES[u.type].name}, ${u.wall === "Island" ? `${u.featureKind==='breakfast'?'breakfast bar':'island'} at ${Math.round(u.islandX??u.ix)},${Math.round(u.islandY??u.iy)} mm, rotation ${u.islandRotation||0}°` : `wall ${u.wall} at ${Math.round(u.x)} mm`}, W${Math.round(u.w)} × H${u.h} × D${u.d} mm, bottom ${u.z} mm; fronts ${u.frontLayout==='open'?'open shelves':u.type==='drawers'||u.frontLayout==='drawers'?'drawers':'doors'}, infill ${u.frontMaterial||(u.type==='glass'?'glass':'acp')}, colour ${u.frontColor||p.style.front}, divisions ${u.doorDivisions||'automatic'}`,
     )
     .join("\n")+(p.island&&islandSettings(p).kind==='breakfast'?`\nBREAKFAST BAR: dark stone overhang, warm vertical timber-slat outer face and ${islandSettings(p).pendants} warm glass pendant lights matching the supplied references; retain aluminum construction and fronts on the working side.`:'')+`\nIMAGE REFERENCE KEY: use all wall A/B/C/D elevations plus the island elevation when supplied. Isometric labels are cabinet ID / W(width mm) and map directly to this schedule.`;
   return `Create a photorealistic visualization using the attached CODEX KITCHEN reference images.\n\nREFERENCE PRIORITY\nPerspective = camera and visible design. Plan = positions and dimensions. Elevations = exact front divisions. Frame view = aluminum construction. Preserve the room, cabinet count, proportions, corner ownership, appliances, openings and camera angle. Do not add, remove or relocate cabinets. Render materials and lighting, not a new layout.\n\nPROJECT: ${p.name}\nRoom: ${p.room.width} × ${p.room.depth} × ${p.room.height} mm. Layout: ${p.room.layout}. Walls A rear, B right, C front, D left (clockwise).\nOpenings: ${p.openings.map((o) => `${o.kind} wall ${o.wall}, offset ${o.x}, width ${o.w}, height ${o.h}, sill ${o.sill} mm`).join("; ") || "none"}.\n\nCONSTRUCTION\n${p.style.mode} aluminum frame, 25.4 × 38.1 mm hollow box bar, wall 1.2 mm; 3 mm ACP; 45 mm sash face and 21.2 mm sash depth; 3 mm front reveals. Keep shared run members continuous. Frame finish ${p.style.frame}; front color ${p.style.front}, ${p.style.finish}; countertop ${p.style.counter}; wall ${p.style.wall}. Glass display fronts remain glass.\nLighting: ${p.style.lighting}. Setting: ${p.style.scene}.\n\nCABINET SCHEDULE\n${units}\n\n${plan.errors.length || plan.unmet.length ? "UNRESOLVED DESIGN: " + [...plan.errors, ...plan.unmet.map((x) => "Unplaced " + x)].join("; ") : "Design passed UAT room/footprint checks."}\nSite notes: ${p.notes || "None"}.\n\nOutput a clean high-resolution architectural interior image, realistic aluminum reflections and ACP texture, straight verticals and believable appliance scale. Do not draw dimensions or labels on the final image. Ask about conflicts between references instead of inventing changes. These are UAT design references, not approved fabrication drawings.`;
@@ -1002,7 +1051,7 @@ export function parseProject(text) {
   });
   if (!["I", "L", "U", "GALLEY"].includes(clean.room.layout))
     throw Error("Unsupported layout.");
-  const e = roomErrors(clean);
+  const e = [...roomErrors(clean),...cabinetBriefErrors(clean)];
   if (e.length) throw Error(e[0]);
   if (clean.units) {
     const e = validateUnits(clean, clean.units);

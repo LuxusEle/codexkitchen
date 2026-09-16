@@ -81,7 +81,7 @@ test('Straight-kitchen tall units form blocks only at run beginnings or ends',()
 });
 
 test('L-kitchen oven is the exposed end tower, never the internal corner tower',()=>{
-  const p=initialProject();p.room={width:3950,depth:2400,height:2700,layout:'L'};
+  const p=initialProject();p.needs.oven=1;p.needs.fridge=1;p.room={width:3950,depth:2400,height:2700,layout:'L'};
   const result=solve(p),oven=result.units.find(u=>u.type==='oven');
   assert.ok(oven);assert.equal(oven.wall,'B');
   assert.ok(Math.abs(oven.x+oven.w-(p.room.depth-25))<.1,JSON.stringify(oven));
@@ -89,7 +89,7 @@ test('L-kitchen oven is the exposed end tower, never the internal corner tower',
 });
 
 test('4700 mm straight run without fridge closes multiple specialist gaps in one reflow',()=>{
-  const p=initialProject();p.room={width:4700,depth:2400,height:2700,layout:'I'};p.needs.fridge=0;
+  const p=initialProject();p.room={width:4700,depth:2400,height:2700,layout:'I'};p.needs.fridge=0;p.needs.oven=1;
   const result=solve(p),base=result.units.filter(u=>u.z<900).sort((a,b)=>a.x-b.x);
   assert.equal(base[0].type,'oven');assert.equal(base[0].x,0);
   assert.ok(!base.some(u=>u.type==='filler'));

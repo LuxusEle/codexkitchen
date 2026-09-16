@@ -6,10 +6,10 @@ import { PROFILE } from "./model.js";
 import { frameRuns, frontDivision } from "./construction.js";
 import { doorBody, SASH_PROFILE } from "./sash-profile.js";
 export const FIT_CLEARANCE=1; // 1 mm per cut edge, not 1 mm total slot oversize.
-const shelfAllowed=u=>!['filler','sink','drawers','spice','bottle','waste','oven'].includes(u.type);
+const shelfAllowed=u=>u.frontLayout!=='drawers'&&!['filler','sink','drawers','spice','bottle','waste','oven'].includes(u.type);
 
 export function frontSpecs(u) {
-  if (["fridge", "dishwasher", "filler"].includes(u.type)||(u.type==='open'&&u.z>=900)) return [];
+  if (["fridge", "dishwasher", "filler"].includes(u.type)||((u.type==='open'||u.frontLayout==='open')&&u.z>=900)) return [];
   const y = u.z + (u.z > 0 ? 1.5 : 41),
     h = u.h - (u.z > 0 ? 3 : 44),
     out = [];
@@ -31,8 +31,8 @@ export function frontSpecs(u) {
   if (u.type === "oven") {
     add(1.5, y, u.w - 3, 550);
     add(1.5, u.z + 1650, u.w - 3, u.h - 1653);
-  } else if (["drawers", "spice", "bottle", "waste"].includes(u.type)) {
-    const n = u.type === "drawers" ? divisions(3) : 1,
+  } else if (u.frontLayout==='drawers'||["drawers", "spice", "bottle", "waste"].includes(u.type)) {
+    const n = u.type === "drawers"||u.frontLayout==='drawers' ? divisions(3) : 1,
       hh = (h - (n - 1) * 3) / n;
     for (let i = 0; i < n; i++)
       add(1.5, y + i * (hh + 3), u.w - 3, hh, "drawer");

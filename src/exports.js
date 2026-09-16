@@ -145,11 +145,13 @@ export function elevationImage(p, units, wall) {
     );
   }
   for (const u of units.filter((u) => u.wall === wall)) {
-    ctx.fillStyle = u.frontColor || ((u.frontMaterial || (u.type==='glass'?'glass':'acp')) === "glass" ? "#91b7ba" : p.style.front);
+    const openShelves=u.z>=900&&(u.frontLayout==='open'||u.type==='open');
+    ctx.fillStyle = openShelves ? '#dee2da' : u.frontColor || ((u.frontMaterial || (u.type==='glass'?'glass':'acp')) === "glass" ? "#91b7ba" : p.style.front);
     ctx.fillRect(...rect(u.x, u.z, u.w, u.h));
     ctx.strokeStyle = p.style.frame;
     ctx.lineWidth = 3;
     ctx.strokeRect(...rect(u.x, u.z, u.w, u.h));
+    if(openShelves)ctx.strokeRect(...rect(u.x,u.z+u.h/2,u.w,3));
     for(const f of frontSpecs(u))ctx.strokeRect(...rect(u.x+f.x,f.y,f.w,f.h));
     ctx.fillStyle = "#163d43";
     ctx.font = "bold 18px Arial";
