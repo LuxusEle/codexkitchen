@@ -10,6 +10,7 @@ import { PROFILE, wallPoint, wallLength, TYPES, islandSettings, legalRunSpans } 
 import { countertopPieces } from "./construction.js";
 import { carcassParts, frontSpecs, hingePositions } from "./assembly.js";
 import { SASH_PROFILE, HANDLE_PROFILE, doorBody } from "./sash-profile.js";
+import {cabinetAtPoint} from './cabinet-actions.js';
 const mat = (color, metalness = 0, roughness = 0.65) =>
   new T.MeshStandardMaterial({ color, metalness, roughness });
 function box(g, w, h, d, x, y, z, m, name) {
@@ -235,7 +236,7 @@ function makeFrames(root, p, units, metal, acp, frameOnly, runId = "all") {
     const g = part.wall === "Island" ? new T.Group() : wallGroup(p, part.wall);
     if (part.wall === "Island") placeIslandGroup(g,part);
     g.userData.partId = part.id;
-    g.userData.unitId = part.unitIds[0];
+    g.userData.unitIds = part.unitIds;
     root.add(g);
     const { w, h, d, x, y, z } = part;
     if(part.sashPlacement){
@@ -632,7 +633,11 @@ const Scene = forwardRef(function Scene(
       setRay(e);
       for(const h of ray.intersectObjects(rt.group?.children||[],true)){
         let o=h.object;
-        while(o){if(o.userData.unitId)return {id:o.userData.unitId,point:h.point};o=o.parent;}
+        while(o){
+          const id=o.userData.unitIds?cabinetAtPoint(data.current.project,data.current.plan.units,o.userData.unitIds,h.point):o.userData.unitId;
+          if(id)return {id,point:h.point};
+          o=o.parent;
+        }
       }
       return null;
     };
@@ -648,7 +653,7 @@ const Scene = forwardRef(function Scene(
       const hit=hitUnit(e),u=hit&&data.current.plan.units.find(unit=>unit.id===hit.id);
       if(!u)return;
       e.stopPropagation();moveStart.current?.();
-      select.current(u.id);controls.enabled=false;renderer.domElement.setPointerCapture?.(e.pointerId);
+      select.current(u.id,{dragging:true});controls.enabled=false;renderer.domElement.setPointerCapture?.(e.pointerId);
       const normal=u.wall==='Island'?new T.Vector3(0,1,0):['A','C'].includes(u.wall)?new T.Vector3(0,0,1):new T.Vector3(1,0,0);
       const plane=new T.Plane().setFromNormalAndCoplanarPoint(normal,hit.point);
       dragging=u.wall==='Island'
@@ -678,24 +683,16 @@ const Scene = forwardRef(function Scene(
     }
     function pointerEnd(e){
       if(!dragging)return;
+      const finished=dragging;
       if(renderer.domElement.hasPointerCapture(e.pointerId))renderer.domElement.releasePointerCapture(e.pointerId);
       dragging=null;controls.enabled=true;moveEnd.current?.(e.type==='pointercancel');
+      if(!finished.moved&&e.type!=='pointercancel')select.current(finished.id,{x:e.clientX,y:e.clientY});
     }
     function click(e) {
       if (!down || Math.hypot(e.clientX - down[0], e.clientY - down[1]) > 5)
         return;
-      setRay(e);
-      const hits = ray.intersectObjects(rt.group?.children || [], true);
-      for (const h of hits) {
-        let o = h.object;
-        while (o) {
-          if (o.userData.unitId) {
-            select.current(o.userData.unitId);
-            return;
-          }
-          o = o.parent;
-        }
-      }
+      const hit=hitUnit(e);
+      select.current(hit?.id||null,{x:e.clientX,y:e.clientY});
     }
     renderer.domElement.addEventListener("pointerdown", pd, true);
     renderer.domElement.addEventListener("pointermove", pointerMove);

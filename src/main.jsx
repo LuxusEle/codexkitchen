@@ -36,6 +36,9 @@ import ThemeToggle from './ThemeToggle.jsx';
 import Dashboard from './Dashboard.jsx';
 import BoxChooser from './BoxChooser.jsx';
 import LengthInput,{MeasurementProvider,MeasurementSwitch,checkLengthInputs} from './LengthInput.jsx';
+import QuickCabinetEditor from './QuickCabinetEditor.jsx';
+import QuoteSummary from './QuoteSummary.jsx';
+import {removeCabinet,canUndoCabinet} from './cabinet-actions.js';
 import {cloudRequest} from './cloud-client.js';
 import {projectIdentity,projectContent,writeDraft,removeDraft,detachedProject} from './project-workspace.js';
 import {copyRenderPack,copyRenderImage,prepareClipboardSheet} from './render-clipboard.js';
@@ -79,7 +82,7 @@ const STEPS = [
   ["Site checklist", ClipboardCheck],
   ["Your kitchen", Refrigerator],
   ["Design", SlidersHorizontal],
-  ["Cutting & BOM", Layers],
+  ["Quote & BOM", Layers],
   ["Export", Sparkles],
 ];
 function Num({ label, value, onChange, min = 0, max = 12000, step = 50, disabled=false }) {
@@ -107,7 +110,7 @@ function Plan({ p, plan, selected, onSelect, onMoveUnit, onMoveOpening, onMoveSt
     if(!item)return;
     const along=item.wall==='A'?q.x:item.wall==='B'?q.y:item.wall==='C'?W-q.x:D-q.y,c=islandSettings(p);
     e.preventDefault();e.stopPropagation();drag.current={kind,id,item,offset:along-item.x,dx:q.x-c.x,dy:q.y-c.y,clientX:e.clientX,clientY:e.clientY,pointerId:e.pointerId};svgRef.current.setPointerCapture(e.pointerId);
-    if(kind==='unit')onSelect(id);
+    if(kind==='unit')onSelect(id,{dragging:true});
   };
   const move=e=>{
     const active=drag.current;if(!active)return;
@@ -162,6 +165,7 @@ function Plan({ p, plan, selected, onSelect, onMoveUnit, onMoveOpening, onMoveSt
         fill="url(#grid)"
         stroke="#526b6a"
         strokeWidth="35"
+        onClick={()=>onSelect(null)}
       />
       {[...plan.units]
         .filter(u=>rowFilter==='all'||(rowFilter==='upper'?u.z>=900:u.z<900))
@@ -182,12 +186,12 @@ function Plan({ p, plan, selected, onSelect, onMoveUnit, onMoveOpening, onMoveSt
           return (
             <g
               key={u.id}
-              onClick={() => onSelect(u.id)}
+              onClick={e=>onSelect(u.id,{x:e.clientX,y:e.clientY})}
               onPointerDown={e=>startDrag(e,'unit',u.id)}
               role="button"
               tabIndex="0"
               onKeyDown={(e) => {
-                if (e.key === "Enter" || e.key === " ") onSelect(u.id);
+                if (e.key === "Enter" || e.key === " "){e.preventDefault();const bounds=e.currentTarget.getBoundingClientRect();onSelect(u.id,{x:bounds.right,y:bounds.top});}
               }}
               aria-label={`Select ${u.id} ${TYPES[u.type]?.name}`}
               style={{ cursor: dragEnabled ? "grab" : "pointer" }}
@@ -263,6 +267,8 @@ function App({account,initialDocument,initialDirty,onDashboard}) {
     [saveError,setSaveError]=useState(''),
     [step, setStep] = useState(0),
     [selected, setSelected] = useState(null),
+    [quickAnchor,setQuickAnchor]=useState(null),
+    [deleteUndo,setDeleteUndo]=useState(null),
     [mode, setMode] = useState("finished"),
     [frameRun, setFrameRun] = useState("all"),
     [xray, setXray] = useState(false),
@@ -361,15 +367,25 @@ function App({account,initialDocument,initialDirty,onDashboard}) {
     ).catch(() => {});
     return () => life.abort();
   }, [p, plan]);
-  const select = (id) => {
+  const select = (id,anchor) => {
     setSelected(id);
-    setStep(4);
+    if(!id||anchor?.dragging||dragSession.current||reviewRef.current){setQuickAnchor(null);return;}
+    setQuickAnchor({x:Number.isFinite(anchor?.x)?anchor.x:window.innerWidth-365,y:Number.isFinite(anchor?.y)?anchor.y:170});
   };
   const editUnit = (k, v) => {
     update({
       units: plan.units.map((u) => (u.id === selected ? { ...u, [k]: v, automatic:false } : u)),
     });
   };
+  const deleteSelectedCabinet=()=>{
+    const result=removeCabinet(p,plan.units,selected);if(!result)return;
+    update(result.patch);setDeleteUndo({...result.undo,label:result.label});setSelected(null);setQuickAnchor(null);
+  };
+  const undoDeleteCabinet=()=>{
+    if(!canUndoCabinet(p,deleteUndo)){setToast('The layout changed after deletion; Undo would overwrite newer work.');return;}
+    update(deleteUndo.before);setDeleteUndo(null);setToast('Deleted cabinet restored.');
+  };
+  const openQuote=()=>{setQuickAnchor(null);setStep(5);setTimeout(()=>document.getElementById('quote-bom-panel')?.scrollIntoView({behavior:'smooth',block:'start'}),0);};
   const showReview=value=>{
     if(value?.valid){
       // A second drag must not turn an earlier invalid draft into the accepted baseline.
@@ -380,6 +396,7 @@ function App({account,initialDocument,initialDirty,onDashboard}) {
     reviewRef.current=value;setMoveReview(value);
   };
   const beginMove=()=>{
+    setQuickAnchor(null);
     dragSession.current={p:displayProject,units:displayPlan.units};setReviewEditing(false);
   };
   const movePlanUnit=(id,patch)=>{
@@ -1098,13 +1115,10 @@ function App({account,initialDocument,initialDirty,onDashboard}) {
             </div>}
             <button
               className="text danger"
-              onClick={() => {
-                update({ units: plan.units.filter((u) => u.id !== unit.id) });
-                setSelected(null);
-              }}
+              onClick={deleteSelectedCabinet}
             >
               <Trash2 size={15} />
-              Remove this cabinet
+              {unit.wall==='Island'?'Remove island / breakfast bar':'Remove this cabinet'}
             </button>
           </>
         )}
@@ -1302,11 +1316,14 @@ function App({account,initialDocument,initialDirty,onDashboard}) {
     5,
     0,
     <>
-      <FabricationControls
+      <p className="eyebrow">06 / QUOTE REVIEW</p><h1>Design to estimate.</h1>
+      <p className="intro">Review the customer estimate and purchasing rates on the right. Confirm site measurements, supplier prices and your business costs before committing a quote.</p>
+      <button className="primary" onClick={openQuote}>Edit quote & BOM prices</button>
+      <details className="advanced-manufacturing"><summary>Advanced: cutting & frame preview</summary><FabricationControls
         p={p}
         job={fabrication}
         onChange={(fabrication) => update({ fabrication })}
-      />
+      /></details>
     </>,
   );
   return (
@@ -1406,7 +1423,7 @@ function App({account,initialDocument,initialDirty,onDashboard}) {
             </div></div>
           </div>
           {roomProblems.length>0&&<div className="room-blocker" role="alert"><strong>Room / opening measurements are stopping cabinet generation</strong><ul>{roomProblems.map((problem,i)=><li key={i}>{problem}</li>)}</ul><button className="secondary compact" onClick={()=>setStep(1)}>Check openings</button><p>Resizing the room does not resize a measured door or window. Correct its wall, offset or size; your cabinet requirements are kept.</p></div>}
-          <BoxChooser p={p} plan={plan} selected={selected} onSelect={id=>{setSelected(id);setStep(4);}} disabled={!!moveReview||!!changeApproval||!!gapFix} onApply={patch=>{update(patch);setSelected(null);setToast('Box choices applied. Review the 3D design, then save your project.');}}/>
+          <BoxChooser p={p} plan={plan} selected={selected} onSelect={select} disabled={!!moveReview||!!changeApproval||!!gapFix} onApply={patch=>{update(patch);setSelected(null);setToast('Box choices applied. Review the 3D design, then save your project.');}}/>
           <div className="design-variants" aria-label="Design alternatives">
             <button className="secondary compact" onClick={shuffle} disabled={!!moveReview&&moveReview.kind!=='shuffle'}><Sparkles size={15}/>Shuffle design</button>
             <span className="variant-help">Keep up to four designs</span>
@@ -1573,16 +1590,17 @@ function App({account,initialDocument,initialDirty,onDashboard}) {
             </div>
           )}
           {step === 5 && (
-            <div className="fabrication-workspace">
+            <div className="fabrication-workspace" id="quote-bom-panel">
               <CostingControls
                 p={p}
                 plan={plan}
                 job={fabrication}
                 onChange={(costing) => update({ costing })}
               />
-              <FabricationResults job={fabrication} onSelect={setSelected} />
+              <details className="advanced-manufacturing"><summary>Advanced: nested cutting / fabrication preview</summary><FabricationResults job={fabrication} onSelect={setSelected} /></details>
             </div>
           )}
+          <QuoteSummary project={p} plan={plan} job={fabrication} onOpen={openQuote}/>
           <div className="workspace-lower">
             <section className="plan-card">
               <div className="row between">
@@ -1679,6 +1697,8 @@ function App({account,initialDocument,initialDirty,onDashboard}) {
           </div>
         </section>
       </main>
+      {unit&&quickAnchor&&!moveReview&&!changeApproval&&!gapFix&&<QuickCabinetEditor key={unit.id} unit={unit} anchor={quickAnchor} project={p} issues={plan.errors} onEdit={editUnit} onClose={()=>setQuickAnchor(null)} onDelete={deleteSelectedCabinet} onMove={()=>{setQuickAnchor(null);setDragEnabled(true);if(['door','run'].includes(mode))setMode('finished');setToast(`Move active: drag ${unit.id} in 3D or plan; review and OK the result.`);}} onMore={()=>{setQuickAnchor(null);setStep(4);setTimeout(()=>document.querySelector('.unit-editor')?.scrollIntoView({behavior:'smooth',block:'center'}),0);}} onFit={()=>{setQuickAnchor(null);runGapAudit();}}/>}
+      {canUndoCabinet(p,deleteUndo)&&<div className="cabinet-undo" role="status"><span>Removed {deleteUndo.label}</span><button className="primary compact" onClick={undoDeleteCabinet}>Undo</button><button className="text" onClick={()=>setDeleteUndo(null)}>Dismiss</button></div>}
       {gapFix&&(
         <div className="modal-backdrop" onMouseDown={()=>setGapFix(null)}>
           <section className="gap-dialog" role="dialog" aria-modal="true" aria-labelledby="gap-dialog-title" onMouseDown={e=>e.stopPropagation()}>

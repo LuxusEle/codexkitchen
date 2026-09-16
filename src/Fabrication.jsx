@@ -11,6 +11,7 @@ import { SASH_PROFILE, HANDLE_PROFILE } from "./sash-profile.js";
 import provenance from "../reference/fabrication/manifest.json";
 import { costingSettings, kitchenEstimate } from "./costing.js";
 import LengthInput from './LengthInput.jsx';
+import {quoteReviewIssues} from './quote-review.js';
 
 const fmt = (n) =>
   Number(n).toLocaleString(undefined, { maximumFractionDigits: 1 });
@@ -140,6 +141,7 @@ const money = (n) =>
 
 export function CostingControls({ p, plan, job, onChange }) {
   const estimate = useMemo(() => kitchenEstimate(p, plan, job), [p, plan, job]);
+  const reviewIssues=quoteReviewIssues(p,plan,job,estimate);
   const cfg = costingSettings(p);
   const [busy, setBusy] = useState(false), [error, setError] = useState("");
   const commit = (patch) => onChange({ ...cfg, ...patch });
@@ -166,6 +168,7 @@ export function CostingControls({ p, plan, job, onChange }) {
       <p className="eyebrow">LKR PRICE CALCULATOR</p>
       <h2>Estimate & purchasing rates</h2>
       <p className="intro">Quantities are measured from this kitchen. Every quantity and rate below is editable.</p>
+      {!!reviewIssues.length&&<details className="fab-note"><summary>{reviewIssues.length} checks before committing the quote</summary><ul>{reviewIssues.map((issue,i)=><li key={i}>{issue}</li>)}</ul></details>}
       <div className="fab-table price-table">
         <table>
           <thead><tr><th>Customer estimate</th><th>Qty</th><th>Unit</th><th>Rate (LKR)</th><th>Total</th></tr></thead>
