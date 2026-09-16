@@ -4,7 +4,7 @@ Local aluminum kitchen planning workspace. Run `npm install`, then `npm run dev`
 
 ## Workflow
 
-Cloud sign-in, project saving, private files and admin approvals are available through **Cloud / Sign in**. See [DEPLOYMENT.md](DEPLOYMENT.md) for Neon/Vercel configuration and outstanding account setup. Cloud services require their environment variables and the reviewed database migration; device autosave remains separate.
+Staff must sign in before the editor opens. **Admin / All projects** gives the pinned `asanke1` super-admin staff management, optional email verification, activity history and access to every saved cloud project. Operators use **My cloud projects**. See [DEPLOYMENT.md](DEPLOYMENT.md) for configuration and email-provider setup. Device drafts remain separate from shared cloud saves.
 
 Room dimensions and I/L/U/galley arrangement → doors/windows → site checklist and calendar reminder → requested cabinets/appliances and preferred walls → model editing/materials → rendering pack.
 
