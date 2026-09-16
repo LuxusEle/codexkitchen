@@ -1,4 +1,5 @@
 import {initialProject,parseProject} from './model.js';
+import {defaultBusiness} from './business.js';
 
 export const draftKey=userId=>`CODEXKITCHENAPP_DRAFTS_V2:${userId}`;
 export function projectIdentity(p){return p.cloud?.id||p.projectId;}
@@ -8,7 +9,7 @@ export function detachedProject(source,name=source.name){
   return {...p,projectId:crypto.randomUUID(),name:name.trim()||'Untitled kitchen'};
 }
 export function newProject(name){return detachedProject({...initialProject(),openings:[]},name);}
-export function cloudDocument(row){return {...parseProject(JSON.stringify(row.document)),cloud:{id:row.id,ownerId:row.ownerId,revision:row.revision}};}
+export function cloudDocument(row){const businessId=row.businessId||'luxus';return {...parseProject(JSON.stringify(row.document)),businessId,businessProfile:row.document.businessProfile||defaultBusiness(businessId),cloud:{id:row.id,ownerId:row.ownerId,revision:row.revision}};}
 export function readDrafts(userId,storage=localStorage){
   const rows=JSON.parse(storage.getItem(draftKey(userId))||'[]');
   if(!Array.isArray(rows))throw Error('Local draft index is invalid. Export your browser data before clearing storage.');

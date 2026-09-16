@@ -5,7 +5,8 @@
 Live baseline: `357536e` on main. Do not push, merge or deploy this development
 branch without explicit approval. Existing Vercel behaviour must remain unchanged.
 The broader design roadmap below is NOT authorised for implementation yet.
-Only the separate customer quotation pack described below is authorised locally.
+The separate customer quotation pack and two-business owner administration are
+authorised locally. See `BUSINESS-ADMIN-UAT.md` for implementation and release gates.
 
 ## Goal
 

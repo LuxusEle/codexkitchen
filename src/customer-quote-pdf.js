@@ -1,25 +1,28 @@
 import { jsPDF } from 'jspdf';
-import { BRAND, publicQuote, money } from './customer-quote.js';
+import { publicQuote, money } from './customer-quote.js';
 
 const clean=text=>String(text??'').replace(/[\u2013\u2014]/g,'-').replace(/[\u2018\u2019]/g,"'").replace(/[\u201c\u201d]/g,'"').replace(/\u2022/g,'-');
 // This accepts only a quotation draft and processed images, never the project or BOM.
 export function customerQuotePdf(draft,images,logo) {
-  const q=publicQuote(draft,images),doc=new jsPDF({unit:'mm',format:'a4'});
-  doc.setProperties({title:`${q.reference} R${q.revision} - ${q.subject}`,author:BRAND.name,subject:'Customer quotation and design impressions'});
+  const q=publicQuote(draft,images),brand=q.brand,doc=new jsPDF({unit:'mm',format:'a4'});
+  doc.setProperties({title:`${q.reference} R${q.revision} - ${q.subject}`,author:brand.name,subject:'Customer quotation and design impressions'});
   let y=0;
   const text=(value,x,yy,size=10,bold=false,options={})=>{doc.setFont('helvetica',bold?'bold':'normal');doc.setFontSize(size);doc.text(clean(value),x,yy,options);};
+  const fitText=(value,x,yy,width,size=10,bold=false)=>{doc.setFont('helvetica',bold?'bold':'normal');doc.setFontSize(size);const actual=doc.getTextWidth(clean(value));text(value,x,yy,Math.min(size,size*width/Math.max(actual,1)),bold);};
+  function brandLogo(x,yy,w,h){if(!logo)return;const info=doc.getImageProperties(logo),scale=Math.min(w/info.width,h/info.height),iw=info.width*scale,ih=info.height*scale;doc.addImage(logo,info.fileType,x+(w-iw)/2,yy+(h-ih)/2,iw,ih);}
   function header(first=false) {
-    doc.setFillColor('#303330');doc.rect(0,0,210,first?46:27,'F');doc.setTextColor('#ffffff');
+    doc.setFont('helvetica','normal');doc.setFontSize(8);const address=doc.splitTextToSize(clean(brand.address),140),extra=first?Math.max(0,address.length-2)*4:0;
+    doc.setFillColor('#303330');doc.rect(0,0,210,first?46+extra:27,'F');doc.setTextColor('#ffffff');
     if(first){
-      if(logo)doc.addImage(logo,'JPEG',14,5,32,33.6);
-      text('LUXUS ELEMENTE',56,13,16,true);text('CUSTOMER QUOTATION',56,22,10);
-      text(BRAND.address,56,29,8,false,{maxWidth:140});text(`${BRAND.phone}  |  ${BRAND.email}`,56,40,8);
+      brandLogo(14,5,32,33.6);
+      fitText(brand.name.toUpperCase(),56,13,140,13,true);text('CUSTOMER QUOTATION',56,22,10);
+      text(address.join('\n'),56,29,8);fitText(`${brand.phone}  |  ${brand.email}`,56,40+extra,140,8);
     }else{
-      if(logo)doc.addImage(logo,'JPEG',14,4,18,18.9);
-      text('LUXUS ELEMENTE',38,12,12,true);text(`${BRAND.phone}  |  ${BRAND.email}`,38,20,8);
+      brandLogo(14,4,18,18.9);
+      fitText(brand.name.toUpperCase(),38,12,126,11,true);fitText(`${brand.phone}  |  ${brand.email}`,38,20,158,8);
       text('QUOTATION',196,12,9,false,{align:'right'});
     }
-    doc.setTextColor('#303330');y=first?56:37;
+    doc.setTextColor('#303330');y=first?56+extra:37;
     if(!first){doc.setFontSize(9);const lines=doc.splitTextToSize(clean(`${q.reference}  /  Revision ${q.revision}`),182);text(lines.join('\n'),14,y,9,true);y+=lines.length*4.2+6;}
   }
   function next(){doc.addPage();header();}
@@ -67,13 +70,13 @@ export function customerQuotePdf(draft,images,logo) {
     paragraph(img.caption||`Rendered view ${i+1}`,11,true);
     const maxH=244-y,scale=Math.min(182/img.width,maxH/img.height),w=img.width*scale,h=img.height*scale;
     doc.addImage(img.url,'JPEG',14+(182-w)/2,y+(maxH-h)/2,w,h,undefined,'FAST');y=254;
-    paragraph('Illustrative render - not a manufacturing drawing. Confirm finishes, dimensions and appliances against the approved design. LUXUS watermark applied to the supplied image.',9);
+    paragraph(`Illustrative render - not a manufacturing drawing. Confirm finishes, dimensions and appliances against the approved design. ${brand.name} watermark applied to the supplied image.`,9);
   }
   const count=doc.getNumberOfPages();
   for(let page=1;page<=count;page++){
     doc.setPage(page);doc.setDrawColor('#cfc6b8');doc.line(14,281,196,281);doc.setTextColor('#6f706c');
     doc.setFontSize(8);const shortRef=doc.splitTextToSize(clean(`${q.reference} / R${q.revision}`),105)[0];
-    text(shortRef,14,287,8);text(`Luxus Elemente  |  ${page} / ${count}`,196,287,8,false,{align:'right'});
+    text(shortRef,14,287,8);text(`${brand.name}  |  ${page} / ${count}`,196,287,8,false,{align:'right'});
   }
   return doc;
 }

@@ -21,7 +21,8 @@ test('legacy drafts migrate once without deleting originals',()=>{
   recoverLegacyDrafts(account,s);recoverLegacyDrafts(account,s);assert.equal(readDrafts('user',s).length,1);assert.ok(s.getItem('CODEXKITCHENAPP_UAT1:user'));
 });
 test('cloud document retains owner and revision while content excludes binding',()=>{
-  const p=newProject('Cloud'),d=cloudDocument({id:'id',ownerId:'owner',revision:4,document:p});assert.equal(d.cloud.ownerId,'owner');assert.equal(d.cloud.revision,4);assert.equal(projectContent(d),projectContent(p));
+  const p=newProject('Cloud'),d=cloudDocument({id:'id',ownerId:'owner',revision:4,document:p});assert.equal(d.cloud.ownerId,'owner');assert.equal(d.cloud.revision,4);
+  const {businessId,businessProfile,...design}=d;assert.equal(businessId,'luxus');assert.equal(businessProfile.id,'luxus');assert.equal(projectContent(design),projectContent(p));
 });
 test('rename, recoverable trash and restore retain all design data',()=>{
   const p=newProject('A'),row={revision:3,document:p};const renamed=projectAction(row,{revision:3,action:'rename',name:'B'});

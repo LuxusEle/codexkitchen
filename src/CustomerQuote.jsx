@@ -10,7 +10,7 @@ import './customer-quote.css';
 const fileData=blob=>new Promise((resolve,reject)=>{const reader=new FileReader();reader.onload=()=>resolve(reader.result);reader.onerror=()=>reject(Error('Could not read the company logo.'));reader.readAsDataURL(blob);});
 export default function CustomerQuote({project,plan,job,onSave,onClose}) {
   const estimate=useMemo(()=>kitchenEstimate(project,plan,job),[project,plan,job]);
-  const [draft,setDraft]=useState(()=>({...newCustomerQuote(project,estimate),...project.customerQuote,options:Array.isArray(project.customerQuote?.options)?project.customerQuote.options.filter(o=>o&&typeof o==='object').map(o=>({...o,id:o.id||crypto.randomUUID()})):[]}));
+  const [draft,setDraft]=useState(()=>{const defaults=newCustomerQuote(project,estimate);return {...defaults,...project.customerQuote,brand:defaults.brand,businessId:defaults.businessId,businessRevision:defaults.businessRevision,options:Array.isArray(project.customerQuote?.options)?project.customerQuote.options.filter(o=>o&&typeof o==='object').map(o=>({...o,id:o.id||crypto.randomUUID()})):[]};});
   const [images,setImages]=useState([]),[step,setStep]=useState(0),[busy,setBusy]=useState(false),[error,setError]=useState(''),[confirmed,setConfirmed]=useState(false),[result,setResult]=useState(null),[saved,setSaved]=useState(false);
   const dialog=useRef(),resultUrl=useRef(),initialFocus=useRef(),alive=useRef(true);
   const errors=quoteErrors(draft,images),totals=quoteTotals(draft);
@@ -25,13 +25,15 @@ export default function CustomerQuote({project,plan,job,onSave,onClose}) {
     if(!files?.length)return;setError('');
     if(images.length+files.length>8){setError('Use at most eight renders per pack.');return;}
     setBusy(true);invalidate();const prepared=[],failures=[];
-    for(const file of files){try{prepared.push(await watermarkRender(file));}catch(e){failures.push(e.message);}}
+    for(const file of files){try{prepared.push(await watermarkRender(file,project.businessProfile?.brand||{name:'Luxus Elemente',watermark:'LUXUS'}));}catch(e){failures.push(e.message);}}
     if(alive.current){setImages(old=>[...old,...prepared]);setError(failures.join('\n'));setBusy(false);}
   }
   async function generate(){
     if(errors.length||!confirmed||busy)return;setBusy(true);setError('');setResult(null);
     try{
-      const response=await fetch('/brand/luxus-logo.jpg');if(!response.ok)throw Error('Company logo is unavailable. Try again before issuing the quote.');
+      const logoSource=project.businessProfile?.brand.logo??'/brand/luxus-logo.jpg';
+      if(!logoSource)throw Error('Ask the owner to upload this business logo before issuing a quote.');
+      const response=await fetch(logoSource);if(!response.ok)throw Error('Company logo is unavailable. Try again before issuing the quote.');
       const logo=await fileData(await response.blob()),doc=customerQuotePdf(draft,images,logo),stem=quoteFilename(draft);
       const pdfBytes=new Uint8Array(doc.output('arraybuffer')),pdf=new Blob([pdfBytes],{type:'application/pdf'});
       const files=[new File([pdf],`${stem}.pdf`,{type:'application/pdf'})];
@@ -40,13 +42,13 @@ export default function CustomerQuote({project,plan,job,onSave,onClose}) {
     }catch(e){setError(e.message);}finally{setBusy(false);}
   }
   async function share(){
-    try{if(!navigator.canShare?.({files:result.files})){setError('File sharing is unavailable here. Download the PDF and attach it in your messaging app.');return;}await navigator.share({files:result.files,title:`Luxus quotation ${draft.reference}`});}
+    try{if(!navigator.canShare?.({files:result.files})){setError('File sharing is unavailable here. Download the PDF and attach it in your messaging app.');return;}await navigator.share({files:result.files,title:`${draft.brand?.name||'Kitchen'} quotation ${draft.reference}`});}
     catch(e){if(e.name!=='AbortError')setError('Sharing failed. Download the PDF instead.');}
   }
   const field=(key,label,type='text',maxLength=200)=><label className="field" key={key}><span>{label}</span><input type={type} maxLength={maxLength} value={draft[key]??''} onChange={e=>edit(key,e.target.value)} {...(type==='number'?{min:0,step:key==='advancePercent'?'0.1':'0.01',max:key==='advancePercent'?100:1e9}:{})}/></label>;
   const area=(key,label,maxLength=6000)=><label className="field"><span>{label}</span><textarea rows={key==='terms'?12:4} maxLength={maxLength} value={draft[key]??''} onChange={e=>edit(key,e.target.value)}/></label>;
   return <dialog className="customer-quote" ref={dialog} aria-labelledby="customer-quote-title" onCancel={e=>{e.preventDefault();close();}}>
-    <div className="cq-heading"><div><p className="eyebrow">LUXUS / CUSTOMER PACK</p><h2 id="customer-quote-title">One quote. Ready to share.</h2></div><button className="secondary" ref={initialFocus} disabled={busy} onClick={close}>Close</button></div>
+    <div className="cq-heading"><div><p className="eyebrow">{draft.brand?.name||'Luxus Elemente'} / CUSTOMER PACK</p><h2 id="customer-quote-title">One quote. Ready to share.</h2></div><button className="secondary" ref={initialFocus} disabled={busy} onClick={close}>Close</button></div>
     <p>One PDF with the consolidated selling price, optional upgrades and embedded, lightly watermarked renders. Internal BOM and supplier costs stay private.</p>
     <nav className="cq-steps" aria-label="Quotation steps">{['1 · Upload renders','2 · Quote & options','3 · Review & export'].map((label,i)=><button key={label} className={step===i?'primary':'secondary'} disabled={busy||(i>0&&!images.length)} aria-current={step===i?'step':undefined} onClick={()=>setStep(i)}>{label}</button>)}</nav>
     {error&&<p role="alert" className="cq-error">{error}</p>}

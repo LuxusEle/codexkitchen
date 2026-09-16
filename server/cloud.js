@@ -11,9 +11,11 @@ import {staffInput,neonAdmin,enforceVerification,mailConfigured,deliverAlert,rec
 import {authenticate,HttpError,validId,fileInput,readJson,FILE_TYPES} from './security.js';
 import {parseProject} from '../src/model.js';
 import {projectAction} from './project-actions.js';
+import {businessOperation,ownProjectFilter,chosenBusiness,loadBusiness} from './business-service.js';
+import {attachBusiness,defaultBusiness,BUSINESS_IDS} from '../src/business.js';
 
 const json=(res,status,data)=>{res.statusCode=status;res.setHeader('Content-Type','application/json');res.end(JSON.stringify(data));};
-export const owned=(table,user,id)=>user.admin?eq(table.id,validId(id)):and(eq(table.ownerId,user.id),eq(table.id,validId(id)));
+export const owned=(table,user,id)=>table===projects?ownProjectFilter(user,id):user.admin?eq(table.id,validId(id)):and(eq(table.ownerId,user.id),eq(table.id,validId(id)),sql`exists (select 1 from ${projects} where ${projects.id} = ${table.projectId} and ${projects.ownerId} = ${table.ownerId} and ${projects.businessId} = ${user.businessId||'__unassigned__'})`);
 const blobOptions=()=>({token:process.env.BLOB_READ_WRITE_TOKEN});
 function requireStorage(){if(!process.env.BLOB_READ_WRITE_TOKEN)throw new HttpError(503,'Connect a PRIVATE Vercel Blob store and configure BLOB_READ_WRITE_TOKEN.');}
 export function isAdmin(user){return process.env.ADMIN_USER_ID?user.id===process.env.ADMIN_USER_ID:Boolean(user.emailVerified&&process.env.ADMIN_EMAIL&&user.email.toLowerCase()===process.env.ADMIN_EMAIL.trim().toLowerCase());}
@@ -25,7 +27,7 @@ async function membership(db,user){
 async function approvedUser(db,req){
   const user=await authenticate(req),member=await membership(db,user);
   if(!member.admin&&member.status!=='active')throw new HttpError(403,'Your account needs administrator approval.');
-  enforceVerification(member,user);return {...user,admin:member.admin};
+  enforceVerification(member,user);return {...user,admin:member.admin,businessId:member.businessId};
 }
 async function projectFor(db,user,id,includeTrash=false){const [p]=await db.select().from(projects).where(owned(projects,user,id)).limit(1);if(!p)throw new HttpError(404,'Project not found.');if(p.document._workspace?.deletedAt&&!includeTrash)throw new HttpError(409,'Project is in Trash. Restore it from the dashboard first.');return p;}
 async function assetFor(db,user,id){const [a]=await db.select().from(assets).where(owned(assets,user,id)).limit(1);if(!a)throw new HttpError(404,'File not found.');return a;}
@@ -57,16 +59,17 @@ export default async function cloud(req,res){
           const asset=await assetFor(db,user,input.assetId);
           if(asset.status!=='pending'||asset.pathname!==pathname||Date.now()-new Date(asset.createdAt).getTime()>15*60000)throw new HttpError(400,'Upload authorisation expired or path is invalid.');
           return {allowedContentTypes:[asset.contentType],maximumSizeInBytes:asset.size,validUntil:Date.now()+10*60000,
-            addRandomSuffix:false,allowOverwrite:false,cacheControlMaxAge:60,tokenPayload:JSON.stringify({id:asset.id,ownerId:asset.ownerId})};
+            addRandomSuffix:false,allowOverwrite:false,cacheControlMaxAge:60,tokenPayload:JSON.stringify({id:asset.id,ownerId:asset.ownerId,businessId:(await projectFor(db,user,asset.projectId)).businessId})};
         },
         onUploadCompleted:async({tokenPayload})=>{
-          const input=JSON.parse(tokenPayload);await completeAsset(db,{id:input.ownerId},input.id);
+          const input=JSON.parse(tokenPayload);await completeAsset(db,{id:input.ownerId,businessId:input.businessId},input.id);
         },
       });return json(res,200,result);
     }
     const user=await authenticate(req);
     const member=await membership(db,user);
     user.admin=member.admin;
+    user.businessId=member.businessId;
     if(op==='me'&&method==='GET')return json(res,200,{user:{id:user.id,email:user.email,emailVerified:user.emailVerified},member});
     if(op==='members'){
       if(!member.admin)throw new HttpError(403,'Only the verified administrator can manage users.');
@@ -81,6 +84,10 @@ export default async function cloud(req,res){
     if(op==='staff'&&['POST','PATCH'].includes(method)){
       if(!member.admin)throw new HttpError(403,'Only the super-admin can edit staff.');
       const body=await readJson(req,8192),input=staffInput(body,method==='POST');
+      const [prior]=method==='PATCH'?await db.select().from(members).where(eq(members.id,String(body.id))):[];
+      const businessId=body.businessId??prior?.businessId??'luxus',monthlyTarget=Number(body.monthlyTarget??prior?.monthlyTarget??0);
+      if(!BUSINESS_IDS.includes(businessId)||!Number.isInteger(monthlyTarget)||monthlyTarget<0||monthlyTarget>10000)throw new HttpError(400,'Choose a business and a valid monthly project target.');
+      await loadBusiness(db,businessId);
       const [duplicate]=await db.select().from(members).where(eq(members.username,input.username));
       if(duplicate&&duplicate.id!==body.id)throw new HttpError(409,'This username is already in use.');
       if(method==='POST'){
@@ -88,7 +95,7 @@ export default async function cloud(req,res){
         const created=await neonAdmin(req,'create-user',{email,password:input.password,name:input.name,role:'user'}),id=created.user?.id;
         if(!id)throw new HttpError(503,'Neon did not return the new account ID.');
         try{
-          const [saved]=await db.insert(members).values({id,email,username:input.username,name:input.name,status:input.status,requireEmailVerification:input.requireEmailVerification}).returning();
+          const [saved]=await db.insert(members).values({id,email,username:input.username,name:input.name,status:input.status,requireEmailVerification:input.requireEmailVerification,businessId,monthlyTarget}).returning();
           await recordActivity(db,user,'staff_created',input.username);return json(res,201,{member:saved});
         }catch(error){await neonAdmin(req,'remove-user',{userId:id}).catch(()=>{});throw error;}
       }
@@ -101,7 +108,7 @@ export default async function cloud(req,res){
       await neonAdmin(req,'update-user',{userId:existing.id,data:{name:input.name,...(changedEmail?{email,emailVerified:false}:{})}});
       if(input.password)await neonAdmin(req,'set-user-password',{userId:existing.id,newPassword:input.password});
       if(input.password||changedEmail||input.status==='blocked')await neonAdmin(req,'revoke-user-sessions',{userId:existing.id});
-      const [saved]=await db.update(members).set({email,username:input.username,name:input.name,status:input.status,requireEmailVerification:input.requireEmailVerification,updatedAt:new Date()}).where(eq(members.id,existing.id)).returning();
+      const [saved]=await db.update(members).set({email,username:input.username,name:input.name,status:input.status,requireEmailVerification:input.requireEmailVerification,businessId,monthlyTarget,updatedAt:new Date()}).where(eq(members.id,existing.id)).returning();
       await recordActivity(db,user,'staff_updated',input.username);return json(res,200,{member:saved});
     }
     if(op==='activity'){
@@ -115,10 +122,13 @@ export default async function cloud(req,res){
     }
     if(!member.admin&&member.status!=='active')throw new HttpError(403,'Your account needs administrator approval.');
     enforceVerification(member,user);
+    const businessResult=await businessOperation({db,user,op,method,req,url,projectFor});
+    if(businessResult!==undefined)return json(res,200,businessResult);
     if(op==='projects'&&method==='GET'){
       const trash=url.searchParams.get('trash')==='true',offset=Math.max(0,Math.min(100000,Number(url.searchParams.get('offset'))||0));
       const archived=sql`${projects.document}->'_workspace'->>'deletedAt'`;
-      const rows=await db.select({id:projects.id,ownerId:projects.ownerId,owner:members.username,name:projects.name,revision:projects.revision,updatedAt:projects.updatedAt}).from(projects).leftJoin(members,eq(projects.ownerId,members.id)).where(and(user.admin?undefined:eq(projects.ownerId,user.id),trash?sql`${archived} is not null`:sql`${archived} is null`)).orderBy(desc(projects.updatedAt),projects.id).limit(101).offset(Math.floor(offset));
+      const businessId=url.searchParams.get('businessId');if(businessId)chosenBusiness(user,businessId);
+      const rows=await db.select({id:projects.id,ownerId:projects.ownerId,owner:members.username,name:projects.name,revision:projects.revision,businessId:projects.businessId,reviewStatus:projects.reviewStatus,reviewNote:projects.reviewNote,reviewedRevision:projects.reviewedRevision,updatedAt:projects.updatedAt}).from(projects).leftJoin(members,eq(projects.ownerId,members.id)).where(and(ownProjectFilter(user),businessId?eq(projects.businessId,businessId):undefined,trash?sql`${archived} is not null`:sql`${archived} is null`)).orderBy(desc(projects.updatedAt),projects.id).limit(101).offset(Math.floor(offset));
       return json(res,200,{projects:rows.slice(0,100),hasMore:rows.length>100});
     }
     if(op==='project'&&method==='PATCH'){
@@ -130,13 +140,17 @@ export default async function cloud(req,res){
     }
     if(op==='project'&&method==='GET'){const saved=await projectFor(db,user,url.searchParams.get('id'));await recordActivity(db,user,'project_opened',saved.id);return json(res,200,{project:saved});}
     if(op==='project'&&['POST','PUT'].includes(method)){
-      const body=await readJson(req),document=cleanProject(body.document),name=String(document.name||'Untitled kitchen').slice(0,100);
+      const body=await readJson(req);let document=cleanProject(body.document);const name=String(document.name||'Untitled kitchen').slice(0,100);
       if(method==='POST'){
-        const [saved]=await db.insert(projects).values({id:randomUUID(),ownerId:user.id,name,document}).returning();await recordActivity(db,user,'project_created',saved.id);return json(res,201,{project:saved});
+        const businessId=chosenBusiness(user,document.businessId||user.businessId);
+        document=attachBusiness(document,await loadBusiness(db,businessId),{fresh:true});
+        const [saved]=await db.insert(projects).values({id:randomUUID(),ownerId:user.id,businessId,name,document}).returning();await recordActivity(db,user,'project_created',saved.id);return json(res,201,{project:saved});
       }
-      const id=validId(url.searchParams.get('id'));await projectFor(db,user,id);
+      const id=validId(url.searchParams.get('id')),existing=await projectFor(db,user,id);
+      if(document.businessId&&document.businessId!==existing.businessId)throw new HttpError(400,'A saved project cannot change business. Create a reviewed copy instead.');
+      document=attachBusiness(document,existing.document.businessProfile||defaultBusiness(existing.businessId));
       if(!Number.isInteger(body.revision)||body.revision<1)throw new HttpError(400,'A project revision is required.');
-      const [saved]=await db.update(projects).set({name,document,revision:sql`${projects.revision}+1`,updatedAt:new Date()})
+      const [saved]=await db.update(projects).set({name,document,reviewStatus:'draft',revision:sql`${projects.revision}+1`,updatedAt:new Date()})
         .where(and(owned(projects,user,id),eq(projects.revision,body.revision))).returning();
       if(!saved)throw new HttpError(409,'This project changed on another device. Open the cloud version or save a new copy. Your local work is untouched.');
       await recordActivity(db,user,'project_saved',saved.id);return json(res,200,{project:saved});

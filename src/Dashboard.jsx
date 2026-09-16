@@ -3,6 +3,8 @@ import {Box,Plus,FolderOpen,Copy,Trash2,RotateCcw,Pencil,Upload} from 'lucide-re
 import UserMenu from './UserMenu.jsx';
 import ThemeToggle from './ThemeToggle.jsx';
 import AdminPanel from './AdminPanel.jsx';
+import ActivityPresence from './ActivityPresence.jsx';
+import {attachBusiness,projectBusiness} from './business.js';
 import {cloudRequest} from './cloud-client.js';
 import {parseProject} from './model.js';
 import {cloudDocument,detachedProject,newProject,readDrafts,recoverLegacyDrafts,removeDraft,writeDraft} from './project-workspace.js';
@@ -15,6 +17,9 @@ function Dialog({title,children,onClose,busy}){
   </dialog>;
 }
 export default function Dashboard({account,onOpen}){
+  const [businesses,setBusinesses]=useState([]),[businessId,setBusinessId]=useState(account.member.businessId||'luxus');
+  useEffect(()=>{cloudRequest('businesses').then(r=>setBusinesses(r.businesses)).catch(e=>setError(e.message));},[]);
+  const business=businesses.find(b=>b.id===businessId);
   const [projects,setProjects]=useState([]),[drafts,setDrafts]=useState([]),[tab,setTab]=useState('projects'),[search,setSearch]=useState(''),[busy,setBusy]=useState(false),[loading,setLoading]=useState(true),[error,setError]=useState(''),[notice,setNotice]=useState(''),[modal,setModal]=useState(null),[name,setName]=useState(''),[hasMore,setHasMore]=useState(false);
   const importer=useRef(),listGeneration=useRef(0),userId=account.user.id;
   const localRefresh=()=>setDrafts(readDrafts(userId));
@@ -39,6 +44,8 @@ export default function Dashboard({account,onOpen}){
     const {project}=await cloudRequest('project',{params:{id:row.id}});openDocument(cloudDocument(project));
   }
   async function create(document){
+    if(!business)throw Error('Business settings are not loaded. Refresh and try again.');
+    document=attachBusiness(document,business,{fresh:true});
     const {project}=await cloudRequest('project',{method:'POST',body:{document}});openDocument(cloudDocument(project));
   }
   async function action(row,action,name){
@@ -48,21 +55,25 @@ export default function Dashboard({account,onOpen}){
     if(draft&&!draft.dirty)removeDraft(userId,row.id);
     localRefresh();setModal(null);setNotice(action==='trash'?'Moved to Trash. Project and attachments can be restored.':action==='restore'?'Project restored.':'Project renamed.');await refresh();return project;
   }
-  async function importFile(file){if(file.size>2e6)throw Error('Project JSON must be smaller than 2 MB.');const p=detachedProject(parseProject(await file.text()));openDocument(p,true);}
+  async function importFile(file){if(!business)throw Error('Load business settings before importing.');if(file.size>2e6)throw Error('Project JSON must be smaller than 2 MB.');const p=attachBusiness(detachedProject(parseProject(await file.text())),business,{fresh:true});openDocument(p,true);}
   const rows=projects.filter(p=>`${p.name} ${p.owner||''}`.toLowerCase().includes(search.toLowerCase()));
-  const localRows=drafts.filter(d=>(d.dirty||!d.document.cloud)&&d.document.name.toLowerCase().includes(search.toLowerCase()));
+  const localRows=drafts.filter(d=>(account.member.admin||projectBusiness(d.document)===account.member.businessId)&&(d.dirty||!d.document.cloud)&&d.document.name.toLowerCase().includes(search.toLowerCase()));
   return <div className="workspace">
     <header className="workspace-header"><div className="brand"><span className="brand-icon"><Box size={24}/></span><span>CODEX<span className="brand-light">KITCHEN</span><small>PROJECT WORKSPACE</small></span></div><div className="header-actions"><ThemeToggle/><UserMenu account={account}/></div></header>
     <main className="dashboard">
+      <ActivityPresence/>
+      <label className="field">Business for new projects, imports and copies<select value={businessId} disabled={!account.member.admin} onChange={e=>setBusinessId(e.target.value)}>{businesses.map(b=><option key={b.id} value={b.id}>{b.name}</option>)}</select></label>
       <div className="dashboard-heading"><div><p className="eyebrow">BUSINESS TRIAL · PROJECTS FIRST</p><h1>Your kitchen projects</h1><p>Start a new project or continue a saved design.</p></div><div className="row"><button className="secondary" disabled={busy} onClick={()=>importer.current.click()}><Upload size={17}/>Import JSON</button><button className="primary" disabled={busy} onClick={()=>{setName('');setError('');setModal({type:'new'});}}><Plus size={18}/>New project</button></div></div>
       <input ref={importer} type="file" accept=".json,application/json" hidden onChange={e=>{const f=e.target.files[0];e.target.value='';if(f)run(()=>importFile(f));}}/>
       <nav className="workspace-tabs" aria-label="Workspace sections">{[['projects',account.member.admin?'All projects':'My projects'],['drafts','Local recovery'],['trash','Trash'],...(account.member.admin?[['admin','Users & activity']]:[])].map(([id,label])=><button key={id} className={tab===id?'active':''} aria-current={tab===id?'page':undefined} disabled={busy} onClick={()=>setTab(id)}>{label}</button>)}</nav>
       {error&&!modal&&<div role="alert" className="workspace-alert">{error}</div>}{notice&&<p role="status" className="workspace-notice">{notice}</p>}
-      {tab==='admin'?<section className="dashboard-admin"><AdminPanel/></section>:<>
+      {tab==='admin'?<section className="dashboard-admin"><AdminPanel onOpenProject={project=>openDocument(cloudDocument(project))}/></section>:<>
         <div className="dashboard-toolbar"><label>Find a project<input type="search" placeholder="Search name or operator" value={search} onChange={e=>setSearch(e.target.value)}/></label><button className="secondary compact" disabled={busy||loading} onClick={()=>run(async()=>{localRefresh();if(tab!=='drafts')await refresh();})}>Refresh</button></div>
         {tab==='drafts'?<><p className="workspace-help">Recovery copies belong to this account on this browser. They are not cloud backups. Open one and choose Save project to sync it.</p><div className="project-grid">{localRows.map(d=><article className="project-card" key={d.id}><span className="project-status">Unsynced · this browser</span><h2>{d.document.name}</h2><p>{new Date(d.updatedAt).toLocaleString()}</p><button className="primary" disabled={busy} onClick={()=>run(async()=>openDocument(d.document,true))}>Resume draft</button></article>)}</div>{!localRows.length&&<div className="workspace-empty"><h2>No unsynced drafts</h2><p>Local recovery copies will appear here when needed.</p></div>}</>:<>
           {loading&&<p role="status">Loading projects…</p>}
           <div className="project-grid">{rows.map(p=><article className="project-card" key={p.id}>
+            <small>{businesses.find(b=>b.id===p.businessId)?.name||p.businessId} · {p.reviewedRevision===p.revision?p.reviewStatus:'Needs review'}</small>
+            {p.reviewNote&&<p>Owner feedback: {p.reviewNote}</p>}
             <span className="project-status">{tab==='trash'?'In Trash':'Cloud saved'} · revision {p.revision}</span><h2>{p.name}</h2><p>{p.owner||'Operator'} · {new Date(p.updatedAt).toLocaleString()}</p>
             <div className="project-actions">{tab==='trash'?<button className="primary" disabled={busy} onClick={()=>run(()=>action(p,'restore'))}><RotateCcw size={16}/>Restore</button>:<>
               <button className="primary" disabled={busy} onClick={()=>run(()=>open(p))}><FolderOpen size={16}/>Open design</button>

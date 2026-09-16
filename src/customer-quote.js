@@ -19,12 +19,14 @@ export const DEFAULT_TERMS = [
 const dateOnly = date => `${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,'0')}-${String(date.getDate()).padStart(2,'0')}`;
 export function newCustomerQuote(project, estimate, now = new Date()) {
   const expiry = new Date(now); expiry.setDate(expiry.getDate()+14);
+  const profile=project.businessProfile,brand=profile?.brand||BRAND;
   return {reference:`QT-DRAFT-${now.getTime().toString(36).toUpperCase()}`, revision:'01',
     date:dateOnly(now), validUntil:dateOnly(expiry), customer:'', address:'', contact:'',
     subject:project.name || 'Kitchen design proposal', scope:'', exclusions:'',
-    baseAmount:estimate.salesTotal, taxNote:'', options:[], terms:DEFAULT_TERMS,
-    advancePercent:85, paymentNote:'Balance payable before production completion.',
-    payee:BRAND.payee, bank:BRAND.bank, account:BRAND.account,
+    baseAmount:estimate.salesTotal, taxNote:'', options:[], terms:profile?profile.terms:DEFAULT_TERMS,
+    brand:{...brand},businessId:project.businessId||'luxus',businessRevision:profile?.revision||1,
+    advancePercent:profile?.advancePercent??85, paymentNote:'Balance payable before production completion.',
+    payee:brand.payee, bank:brand.bank, account:brand.account,
   };
 }
 export const money = value => `LKR ${Number(value).toLocaleString('en-LK',{minimumFractionDigits:2,maximumFractionDigits:2})}`;
@@ -37,6 +39,7 @@ export function quoteTotals(draft) {
 }
 export function quoteErrors(draft, images=[]) {
   const errors=[];
+  if(draft.brand)for(const k of ['name','address','phone','email'])if(typeof draft.brand[k]!=='string'||!draft.brand[k].trim()||draft.brand[k].length>300)errors.push(`Complete the business ${k} in owner settings.`);
   for(const [key,label,max] of [['reference','Quote reference',70],['revision','Revision',20],['customer','Customer name',150],['subject','Project title',200],['scope','Included scope',6000],['exclusions','Exclusions / customer supply (write None if none)',4000],['taxNote','Tax treatment',500],['terms','Conditions',14000],['paymentNote','Payment arrangement',1500],['payee','Account holder',200],['bank','Bank name',100],['account','Bank account',100]]) {
     if(typeof draft[key]!=='string'||!draft[key].trim()||draft[key].length>max)errors.push(`${label} is required (maximum ${max} characters).`);
   }
@@ -49,7 +52,7 @@ export function quoteErrors(draft, images=[]) {
   else for(const option of draft.options)if(!option||typeof option.title!=='string'||!option.title.trim()||option.title.length>300||!amountOK(option.amount)||typeof option.selected!=='boolean')errors.push('Each option needs a description and a non-negative price.');
   if(!images.length||images.length>8)errors.push('Add 1 to 8 rendered images.');
   if(images.some(i=>typeof i.url!=='string'||!i.url.startsWith('data:image/jpeg;base64,')||!Number.isFinite(i.width)||!Number.isFinite(i.height)||i.width<=0||i.height<=0))errors.push('An image could not be prepared. Remove it and upload again.');
-  const textValues=[...Object.values(draft).filter(v=>typeof v==='string'),...(Array.isArray(draft.options)?draft.options:[]).map(o=>o?.title||''),...images.map(i=>i.caption||'')];
+  const textValues=[...Object.values(draft).filter(v=>typeof v==='string'),...Object.values(draft.brand||{}).filter(v=>typeof v==='string'&&!v.startsWith('data:image/')),...(Array.isArray(draft.options)?draft.options:[]).map(o=>o?.title||''),...images.map(i=>i.caption||'')];
   if(textValues.some(s=>/[^\x09\x0a\x0d\x20-\x7e\u2013\u2014\u2018\u2019\u201c\u201d\u2022]/.test(s)))errors.push('This PDF version supports English text. Replace unsupported characters before exporting.');
   if(images.some(i=>(i.caption||'').length>300))errors.push('Image captions must be 300 characters or fewer.');
   return [...new Set(errors)];
@@ -57,7 +60,8 @@ export function quoteErrors(draft, images=[]) {
 export function publicQuote(draft, images) {
   const errors=quoteErrors(draft,images); if(errors.length)throw Error(errors.join('\n'));
   const allowed=['reference','revision','date','validUntil','customer','address','contact','subject','scope','exclusions','taxNote','terms','paymentNote','payee','bank','account'];
-  return {...Object.fromEntries(allowed.map(k=>[k,draft[k].trim()])),baseAmount:Number(draft.baseAmount),advancePercent:Number(draft.advancePercent),
+  const brand=draft.brand||BRAND;
+  return {...Object.fromEntries(allowed.map(k=>[k,draft[k].trim()])),brand:Object.fromEntries(['name','address','phone','email'].map(k=>[k,brand[k]])),baseAmount:Number(draft.baseAmount),advancePercent:Number(draft.advancePercent),
     options:draft.options.map(o=>({title:o.title.trim(),amount:Number(o.amount),selected:o.selected})),totals:quoteTotals(draft)};
 }
 export const quoteFilename = quote => `${String(quote.reference).replace(/[^a-z0-9_-]/gi,'-').slice(0,70)}-R${String(quote.revision).replace(/[^a-z0-9_-]/gi,'-').slice(0,20)}`;

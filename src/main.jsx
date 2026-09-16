@@ -34,6 +34,7 @@ import AuthGate from './AuthGate.jsx';
 import UserMenu from './UserMenu.jsx';
 import ThemeToggle from './ThemeToggle.jsx';
 import Dashboard from './Dashboard.jsx';
+import ActivityPresence from './ActivityPresence.jsx';
 import BoxChooser from './BoxChooser.jsx';
 import LengthInput,{MeasurementProvider,MeasurementSwitch,checkLengthInputs} from './LengthInput.jsx';
 import QuickCabinetEditor from './QuickCabinetEditor.jsx';
@@ -477,8 +478,9 @@ function App({account,initialDocument,initialDirty,onDashboard}) {
       const snapshot=copy?detachedProject(currentProject.current,`${currentProject.current.name} — copy`.slice(0,100)):structuredClone(currentProject.current),binding=snapshot.cloud;
       const {project:saved}=await cloudRequest('project',{method:binding?'PUT':'POST',params:binding?{id:binding.id}:{},body:{document:snapshot,revision:binding?.revision}});
       if(!binding&&!copy){try{removeDraft(account.user.id,projectIdentity(snapshot));}catch{}}
-      setP(old=>({...old,...(copy?{name:snapshot.name,projectId:snapshot.projectId}:{}),cloud:{id:saved.id,ownerId:saved.ownerId,revision:saved.revision}}));
-      setSavedContent(projectContent(snapshot));setToast('Project saved to cloud.');
+      const businessBinding={businessId:saved.businessId,businessProfile:saved.document.businessProfile};
+      setP(old=>({...old,...businessBinding,...(copy?{name:snapshot.name,projectId:snapshot.projectId}:{}),cloud:{id:saved.id,ownerId:saved.ownerId,revision:saved.revision}}));
+      setSavedContent(projectContent({...snapshot,...businessBinding}));setToast('Project saved to cloud.');
     }catch(e){setSaveError(e.message);setToast(e.message);}finally{setSaving(false);}
   };
   const backToDashboard=()=>{
@@ -1322,7 +1324,7 @@ function App({account,initialDocument,initialDirty,onDashboard}) {
       <p className="intro">Review the customer estimate and purchasing rates on the right. Confirm site measurements, supplier prices and your business costs before committing a quote.</p>
       <button className="primary" onClick={openQuote}>Edit quote & BOM prices</button>
       <button className="secondary" disabled={!!moveReview||!!changeApproval} onClick={()=>setCustomerQuoteOpen(true)}>Create customer quotation pack</button>
-      <p className="share-note">Upload rendered images, review one package price and options, then export one Luxus PDF with watermarked images embedded. Internal BOM is not included.</p>
+      <p className="share-note">Upload rendered images, review one package price and options, then export one business-branded PDF with watermarked images embedded. Internal BOM is not included.</p>
       <details className="advanced-manufacturing"><summary>Advanced: cutting & frame preview</summary><FabricationControls
         p={p}
         job={fabrication}
@@ -1332,6 +1334,7 @@ function App({account,initialDocument,initialDirty,onDashboard}) {
   );
   return (
     <div className="app">
+      <ActivityPresence projectId={p.cloud?.id}/>
       <header>
         <div className="brand">
           <span className="brand-icon">
@@ -1791,4 +1794,4 @@ function Workspace({account}){
   const [active,setActive]=useState(null);
   return active?<App key={projectIdentity(active.document)} account={account} initialDocument={active.document} initialDirty={active.dirty} onDashboard={()=>setActive(null)}/>:<Dashboard account={account} onOpen={setActive}/>;
 }
-createRoot(document.getElementById("root")).render(<MeasurementProvider><AuthGate>{account=><Workspace key={account.user.id} account={account}/>}</AuthGate></MeasurementProvider>);
+createRoot(document.getElementById("root")).render(<MeasurementProvider><AuthGate>{account=><Workspace key={`${account.user.id}:${account.member.businessId}`} account={account}/>}</AuthGate></MeasurementProvider>);

@@ -1,4 +1,5 @@
 import { countertopPieces } from "./construction.js";
+import {RATE_DEFAULTS} from './business.js';
 
 export const LKR_COST_DEFAULTS = {
   base: 15500,
@@ -51,7 +52,7 @@ function runLength(units, predicate, includeIsland = true) {
 
 export function costingSettings(p) {
   return {
-    salesRates: { ...LKR_COST_DEFAULTS, ...p.costing?.salesRates },
+    salesRates: { ...RATE_DEFAULTS, ...p.businessProfile?.salesRates, ...p.costing?.salesRates },
     salesQuantities: { ...p.costing?.salesQuantities },
     bomRates: { ...p.costing?.bomRates },
     bomQuantities: { ...p.costing?.bomQuantities },
@@ -104,10 +105,11 @@ export function kitchenEstimate(p, plan, job) {
       0,
     );
 
+  const formula=p.businessProfile?.formula||{},baseArea=units.filter(u=>u.z<900&&u.h<1000&&u.type!=='filler').reduce((sum,u)=>sum+u.w*u.h/SQFT,0),upperArea=units.filter(u=>u.z>=900&&u.type!=='filler').reduce((sum,u)=>sum+u.w*u.h/SQFT,0),tallWidth=units.filter(u=>['pantry','oven'].includes(u.type)).reduce((sum,u)=>sum+u.w/FT,0);
   const definitions = [
-    ["base", "Bottom cabinet run", baseMm / FT, "lin ft", "cabinet run"],
-    ["upper", "Top cabinet run", upperMm / FT, "lin ft", "cabinet run"],
-    ["tall", "Tall units by height", tallHeightMm / FT, "vertical ft", "sum of oven / pantry heights"],
+    ["base", "Bottom cabinets", formula.base==='front_sqft'?baseArea:baseMm/FT, formula.base==='front_sqft'?'sq ft':'lin ft', formula.base==='front_sqft'?'external cabinet front area':'cabinet run'],
+    ["upper", "Top cabinets", formula.upper==='front_sqft'?upperArea:upperMm/FT, formula.upper==='front_sqft'?'sq ft':'lin ft', formula.upper==='front_sqft'?'external cabinet front area':'cabinet run'],
+    ["tall", formula.tall==='width_ft'?'Tall units by width':'Tall units by height', formula.tall==='width_ft'?tallWidth:tallHeightMm/FT, formula.tall==='width_ft'?'lin ft':'vertical ft', formula.tall==='width_ft'?'sum of oven / pantry widths':'sum of oven / pantry heights'],
     ["granite", "Granite worktop", graniteSqft, "sq ft", "finished top area"],
     ["splash", "Wall splashback", wallBaseMm / FT, "lin ft", "wall-side bottom run"],
     ["led", "LED under top cabinets", upperMm / FT, "lin ft", "top cabinet run"],

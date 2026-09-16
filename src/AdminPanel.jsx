@@ -1,13 +1,15 @@
 import React,{useEffect,useState} from 'react';
 import {cloudRequest} from './cloud-client.js';
-const empty={username:'',name:'',email:'',password:'',status:'active',requireEmailVerification:false};
-export default function AdminPanel(){
+import BusinessAdmin from './BusinessAdmin.jsx';
+const empty={username:'',name:'',email:'',password:'',status:'active',requireEmailVerification:false,businessId:'luxus',monthlyTarget:0};
+export default function AdminPanel({onOpenProject}){
   const [members,setMembers]=useState([]),[activity,setActivity]=useState([]),[mail,setMail]=useState(false),[form,setForm]=useState(empty),[busy,setBusy]=useState(false),[message,setMessage]=useState('');
   const field=(key,value)=>setForm(s=>({...s,[key]:value}));
   async function refresh(){const [users,events]=await Promise.all([cloudRequest('members'),cloudRequest('activity')]);setMembers(users.members);setActivity(events.activities);setMail(events.mailConfigured);}
   async function run(task){setBusy(true);setMessage('');try{await task();}catch(e){setMessage(e.message);}finally{setBusy(false);}}
   useEffect(()=>{run(refresh);},[]);
   return <section className="cloud-admin"><h3>Super-admin · Staff & activity</h3><p>You can manage staff and open/edit every saved cloud project in the project list above.</p>
+    <BusinessAdmin onOpenProject={onOpenProject}/>
     <button className="secondary compact" disabled={busy} onClick={()=>run(refresh)}>Refresh activity</button>
     {message&&<p role="status" className="cloud-message">{message}</p>}
     <div className="cloud-list">{members.map(m=><button key={m.id} onClick={()=>setForm({...m,email:m.requireEmailVerification?m.email:'',password:''})}><strong>{m.username||m.email}</strong><small>{m.name} · {m.status} · {m.requireEmailVerification?'email verification on':'username only'}</small></button>)}</div>
@@ -15,6 +17,9 @@ export default function AdminPanel(){
     <form onSubmit={e=>{e.preventDefault();run(async()=>{await cloudRequest('staff',{method:form.id?'PATCH':'POST',body:form});setForm(empty);await refresh();setMessage('Staff account saved.');});}}>
       <label className="field">Username<input required value={form.username||''} onChange={e=>field('username',e.target.value)} autoComplete="off" minLength={3} maxLength={40}/></label>
       <label className="field">Name<input value={form.name} onChange={e=>field('name',e.target.value)} maxLength={80}/></label>
+      <label className="field">Assigned business<select value={form.businessId||'luxus'} onChange={e=>field('businessId',e.target.value)}><option value="luxus">Luxus Elemente</option><option value="devonly">Devonly Holdings</option></select></label>
+      <label className="field">Monthly approved-project target<input type="number" min="0" max="10000" required value={form.monthlyTarget??0} onChange={e=>field('monthlyTarget',Number(e.target.value))}/></label>
+      <p>Reassignment does not transfer existing projects. Only the owner retains access to projects in the previous business.</p>
       <label className="field">{form.id?'New password (leave blank to keep)':'Password'}<input type="password" required={!form.id} minLength={8} maxLength={128} value={form.password} onChange={e=>field('password',e.target.value)} autoComplete="new-password"/></label>
       <label className="field">Access<select value={form.status} onChange={e=>field('status',e.target.value)}><option value="active">Active</option><option value="blocked">Disabled</option><option value="pending">Pending</option></select></label>
       <label className="row"><input type="checkbox" checked={form.requireEmailVerification} onChange={e=>field('requireEmailVerification',e.target.checked)}/>Require email verification</label>
