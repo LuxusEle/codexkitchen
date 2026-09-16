@@ -31,6 +31,7 @@ import {
 } from "lucide-react";
 import Scene from "./Scene";
 import AuthGate from './AuthGate.jsx';
+import UserMenu from './UserMenu.jsx';
 import { moveCabinetRun, movableRun, shuffleDesign, designSignature, placementErrors, saveDesignSlot, restoreDesignSlot } from './runPlacement.js';
 import {
   FabricationControls,
@@ -1339,6 +1340,7 @@ function App({account}) {
           <b className="uat">UAT 1</b>
         </div>
         <div className="header-actions">
+          <UserMenu account={account}/>
           <button className="secondary compact" onClick={()=>setCloudOpen(v=>!v)}>{account.member.admin?'Admin / All projects':'My cloud projects'}</button>
           <span className="saved">
             <CheckCircle2 size={14} />

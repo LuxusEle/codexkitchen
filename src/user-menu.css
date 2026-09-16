@@ -1,0 +1,8 @@
+.user-menu{display:flex;align-items:center;gap:12px;flex-wrap:wrap;padding:6px 12px;border:1px solid #cddcd7;border-radius:8px;background:#f4f8f6;max-width:100%}
+.user-menu-identity{display:flex;flex-direction:column;gap:2px;min-width:0}
+.user-menu-identity strong{font-size:13px;overflow-wrap:anywhere}
+.user-menu-identity small{font-size:11px;color:#52706d}
+.user-menu-error{flex-basis:100%;font-size:12px;color:#9b302b}
+.app>header{flex-wrap:wrap;height:auto;min-height:68px;gap:12px}
+.header-actions{flex-wrap:wrap}
+@media(max-width:700px){.user-menu{flex:1 0 100%;justify-content:space-between}}
