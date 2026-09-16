@@ -1,0 +1,22 @@
+:root{--surface:#fff;--page:#f2f5f2;--soft:#edf4f0;color-scheme:light}
+:root[data-theme=dark]{--ink:#e2eeed;--muted:#a6babc;--line:#3d5359;--accent:#e6ac78;--teal:#74c7bc;--surface:#182a31;--page:#0e1c22;--soft:#233a42;color:#e2eeed;background:#0e1c22;color-scheme:dark}
+[data-theme=dark] body{background:var(--page)}
+[data-theme=dark] :is(header,.steps,.step-panel,.step-content,.panel,.card,.plan-card,.check-card,.cloud-panel,.login-card,.user-menu,.need,.opening,.unit-card,.modal,.modal-card,.gap-dialog,.gap-modal,.bom-panel,.fabrication-panel){background:var(--surface);color:var(--ink);border-color:var(--line)}
+[data-theme=dark] :is(input,textarea,select,.number-wrap){background:var(--page);color:var(--ink);border-color:var(--line)}
+[data-theme=dark] :is(.secondary,.segmented,.segmented button,.cloud-list>button,.layout-option,.tip,.cloud-message,.model-badge,.user-menu,.workspace-notice){background:var(--soft);color:var(--ink);border-color:var(--line)}
+[data-theme=dark] :is(.primary,.segmented button.active){background:#83cfc2;color:#102b32}
+[data-theme=dark] :is(.text,.steps button,.field,.color-field,.muted,.intro,.saved,.user-menu-identity small,.login-card small){color:var(--muted)}
+[data-theme=dark] .steps button.active{color:var(--ink);border-color:var(--teal)}
+[data-theme=dark] :is(.login-screen,.workspace,.app,footer){background:var(--page);color:var(--ink)}
+[data-theme=dark] .brand-icon{background:#83cfc2;color:#102b32}
+[data-theme=dark] :is(table,th,td){border-color:var(--line);color:var(--ink)}
+[data-theme=dark] .workspace-alert{background:#432923;color:#ffd0bd;border-color:#8d5141}
+[data-theme=dark] .danger{color:#ffb4a7}
+[data-theme=dark] :is(.editor,.need.active,.counter,.unit-editor,.fabrication-results,.profile-detail,.door-development-controls,.fabrication-workspace .cost-editor,.feature-controls,.resize-choice,.design-slot,.change-preview){background:var(--surface);color:var(--ink);border-color:var(--line)}
+[data-theme=dark] :is(.layouts button,.viewport-toolbar select,.viewport-toolbar .icon,.pack-images a,.design-slot.occupied){background:var(--soft);color:var(--ink);border-color:var(--line)}
+[data-theme=dark] :is(.fab-note,.gap-summary){background:#423525;color:#ffe0a7;border-color:#82683e}
+[data-theme=dark] .change-preview>div{color:var(--ink)}
+[data-theme=dark] .move-review{background:#183e55ee;color:#d5efff;border-color:#6daac9}
+[data-theme=dark] .viewport-bottom{color:#163c42}
+[data-theme=dark] .workspace-tabs button.active{color:var(--ink)}
+/* Theme changes the interface, never customer materials, 3D scene or exported images. */

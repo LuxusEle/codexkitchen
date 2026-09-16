@@ -32,6 +32,11 @@ import {
 import Scene from "./Scene";
 import AuthGate from './AuthGate.jsx';
 import UserMenu from './UserMenu.jsx';
+import ThemeToggle from './ThemeToggle.jsx';
+import Dashboard from './Dashboard.jsx';
+import {cloudRequest} from './cloud-client.js';
+import {projectIdentity,projectContent,writeDraft,removeDraft,detachedProject} from './project-workspace.js';
+import {copyRenderPack,copyRenderImage,prepareClipboardSheet} from './render-clipboard.js';
 import { moveCabinetRun, movableRun, shuffleDesign, designSignature, placementErrors, saveDesignSlot, restoreDesignSlot } from './runPlacement.js';
 import {
   FabricationControls,
@@ -48,7 +53,6 @@ import {
   wallPoint,
   wallLength,
   renderingPrompt,
-  parseProject,
   activeWalls,
   closeRunGaps,
   minimumCabinetWidth,
@@ -64,6 +68,7 @@ import {
 } from "./model";
 import { download, copyText, preparePack, reminderICS } from "./exports";
 import "./style.css";
+import './theme.css';
 const CloudPanel=lazy(()=>import('./CloudPanel.jsx'));
 const STEPS = [
   ["Room", Ruler],
@@ -74,8 +79,6 @@ const STEPS = [
   ["Cutting & BOM", Layers],
   ["Export", Sparkles],
 ];
-const KEY = "CODEXKITCHENAPP_UAT1";
-const PROJECTS_KEY = "CODEXKITCHENAPP_SAVED_PROJECTS_V1";
 function Num({ label, value, onChange, min = 0, max = 12000, step = 50, disabled=false }) {
   return (
     <label className="field">
@@ -267,15 +270,11 @@ function Plan({ p, plan, selected, onSelect, onMoveUnit, onMoveOpening, onMoveSt
     </svg>
   );
 }
-function App({account}) {
-  const storageKey=`${KEY}:${account.user.id}`,projectsKey=`${PROJECTS_KEY}:${account.user.id}`;
-  const [p, setP] = useState(() => {
-      try {
-        return parseProject(localStorage.getItem(storageKey)||(account.member.admin?localStorage.getItem(KEY):null));
-      } catch {
-        return initialProject();
-      }
-    }),
+function App({account,initialDocument,initialDirty,onDashboard}) {
+  const [p, setP] = useState(initialDocument),
+    [savedContent,setSavedContent]=useState(initialDirty?'':projectContent(initialDocument)),
+    [saving,setSaving]=useState(false),
+    [saveError,setSaveError]=useState(''),
     [step, setStep] = useState(0),
     [selected, setSelected] = useState(null),
     [mode, setMode] = useState("finished"),
@@ -299,17 +298,11 @@ function App({account}) {
     [reviewEditing, setReviewEditing] = useState(false),
     [editableBoxes, setEditableBoxes] = useState([]),
     [planRow, setPlanRow] = useState('all'),
-    [cloudOpen,setCloudOpen] = useState(false),
-    [savedProjects, setSavedProjects] = useState(() => {
-      try {
-        const value = JSON.parse(localStorage.getItem(projectsKey) || "[]");
-        return Array.isArray(value) ? value : [];
-      } catch {
-        return [];
-      }
-    });
+    [cloudOpen,setCloudOpen] = useState(false);
+  const dirty=projectContent(p)!==savedContent;
+  const currentProject=useRef(p);currentProject.current=p;
   const scene = useRef(),
-    importer = useRef(),dragSession=useRef(),reviewRef=useRef(),shuffleSeed=useRef(1),shuffleSeen=useRef([]);
+    dragSession=useRef(),reviewRef=useRef(),shuffleSeed=useRef(1),shuffleSeen=useRef([]);
   const plan = useMemo(() => solve(p), [p]);
   const displayProject=useMemo(()=>moveReview?{...p,...moveReview.projectPatch,units:moveReview.units}:p,[p,moveReview]);
   const displayPlan=useMemo(()=>moveReview?solve(displayProject):plan,[displayProject,plan,moveReview]);
@@ -338,14 +331,15 @@ function App({account}) {
     setP((old) => ({ ...old, style: { ...old.style, [k]: v } }));
   useEffect(() => {
     try {
-      localStorage.setItem(storageKey, JSON.stringify(p));
-      setSaveState("Saved on this device");
+      writeDraft(account.user.id,p,dirty);
+      setSaveState(dirty?"Unsynced changes · local recovery saved":"Saved to cloud");
     } catch {
       setSaveState("Storage full — save a project file");
     }
     setPack(null);
     reviewRef.current=null;dragSession.current=null;setMoveReview(null);setReviewEditing(false);
-  }, [p]);
+  }, [p,savedContent]);
+  useEffect(()=>{const leave=e=>{if(dirty||saving){e.preventDefault();e.returnValue='';}};window.addEventListener('beforeunload',leave);return()=>window.removeEventListener('beforeunload',leave);},[dirty,saving]);
   useEffect(() => {
     if (toast) {
       const timer = setTimeout(() => setToast(""), 5500);
@@ -468,29 +462,22 @@ function App({account}) {
     const rotation=islandSettings(old).rotation===90?0:90,islandConfig={...old.islandConfig,rotation};
     return {...old,islandConfig,units:old.units?.map(u=>u.wall==='Island'?{...u,islandRotation:rotation}:u)||null};
   });
-  const saveNamedProject=()=>{
-    const id=p.projectId || crypto.randomUUID?.() || String(Date.now());
-    const project={...p,projectId:id,name:(p.name||"Untitled kitchen").trim()||"Untitled kitchen"};
-    const entry={id,name:project.name,updatedAt:new Date().toISOString(),project};
-    const next=[entry,...savedProjects.filter(item=>item.id!==id)].slice(0,30);
+  const saveNamedProject=async(copy=false)=>{
+    if(saving)return;
+    if(moveReview){setToast('OK or Cancel the design preview before saving.');return;}
+    setSaving(true);setSaveError('');
     try{
-      localStorage.setItem(projectsKey,JSON.stringify(next));
-    }catch{
-      setToast("Project storage is full. Download the JSON file instead.");
-      return;
-    }
-    setSavedProjects(next);
-    setP(project);
-    setToast(`Saved “${project.name}” in Projects on this device.`);
+      const snapshot=copy?detachedProject(currentProject.current,`${currentProject.current.name} — copy`.slice(0,100)):structuredClone(currentProject.current),binding=snapshot.cloud;
+      const {project:saved}=await cloudRequest('project',{method:binding?'PUT':'POST',params:binding?{id:binding.id}:{},body:{document:snapshot,revision:binding?.revision}});
+      if(!binding&&!copy){try{removeDraft(account.user.id,projectIdentity(snapshot));}catch{}}
+      setP(old=>({...old,...(copy?{name:snapshot.name,projectId:snapshot.projectId}:{}),cloud:{id:saved.id,ownerId:saved.ownerId,revision:saved.revision}}));
+      setSavedContent(projectContent(snapshot));setToast('Project saved to cloud.');
+    }catch(e){setSaveError(e.message);setToast(e.message);}finally{setSaving(false);}
   };
-  const openSavedProject=id=>{
-    const entry=savedProjects.find(item=>item.id===id);
-    if(!entry)return;
-    try{
-      setP(parseProject(JSON.stringify(entry.project)));
-      setSelected(null);
-      setToast(`Opened “${entry.name}”.`);
-    }catch(error){setToast(error.message)}
+  const backToDashboard=()=>{
+    if(saving)return;
+    if(moveReview&&!window.confirm('Cancel the unapproved layout preview and return to Projects?'))return;
+    try{writeDraft(account.user.id,p,dirty);onDashboard();}catch{setToast('Local recovery storage is full. Save to cloud or download JSON before leaving.');}
   };
   const openGapChooser=(units,audit)=>{
     const candidates=gapResizeCandidates(p,units,audit.gaps);
@@ -587,6 +574,9 @@ function App({account}) {
     try {
       await new Promise((r) => setTimeout(r, 50));
       const result = preparePack(p, plan, scene.current);
+      // A clipboard limitation must never prevent downloading the existing image pack.
+      try{result.clipboardSheet=await prepareClipboardSheet(result.images);}catch{result.clipboardSheet=null;}
+      if(currentProject.current!==p){setToast('Design changed while preparing images. Prepare the pack again.');return;}
       setPack(result);
       setToast("Images and prompt are ready. Download or share below.");
     } catch (e) {
@@ -1223,10 +1213,10 @@ function App({account}) {
         <>
           <div className="pack-images">
             {pack.images.map((img) => (
-              <a key={img.name} download={img.name} href={img.url}>
+              <div key={img.name}><a download={img.name} href={img.url}>
                 <img src={img.url} alt={img.name.replace(".png", "")} />
                 <span>{img.name.replace(/\d+-/, "").replace(".png", "")}</span>
-              </a>
+              </a><button className="text" onClick={()=>copyRenderImage(img).then(()=>setToast('Image copied.')).catch(e=>setToast(e.message))}>Copy image</button></div>
             ))}
           </div>
           <button
@@ -1240,6 +1230,8 @@ function App({account}) {
             <Share2 size={17} />
             Share images + prompt
           </button>
+          <button className="secondary full" onClick={()=>copyRenderPack(pack).then(()=>setToast('Prompt + all-view sheet copied. If your chat pastes only the image, use Copy prompt next.')).catch(e=>setToast(e.message))}><Copy size={17}/>Copy prompt + all views</button>
+          <p className="share-note">Copies the prompt and one labelled image sheet containing every view. Your chat may paste only one format. Use Copy prompt separately if needed; download the ZIP for separate full-resolution images.</p>
         </>
       )}
       <div className="two export-actions">
@@ -1340,55 +1332,23 @@ function App({account}) {
           <b className="uat">UAT 1</b>
         </div>
         <div className="header-actions">
+          <button className="secondary compact" disabled={saving} onClick={backToDashboard}><ArrowLeft size={16}/>Projects</button>
+          <ThemeToggle/>
           <UserMenu account={account}/>
-          <button className="secondary compact" onClick={()=>setCloudOpen(v=>!v)}>{account.member.admin?'Admin / All projects':'My cloud projects'}</button>
+          <button className="secondary compact" onClick={()=>setCloudOpen(v=>!v)}>Project files</button>
           <span className="saved">
             <CheckCircle2 size={14} />
             {saveState}
           </span>
-          <select
-            className="project-picker"
-            aria-label="Saved projects"
-            value=""
-            onChange={(e)=>{openSavedProject(e.target.value);e.target.value=""}}
-          >
-            <option value="">Projects ({savedProjects.length})</option>
-            {savedProjects.map(item=><option key={item.id} value={item.id}>{item.name}</option>)}
-          </select>
           <button
             className="secondary compact"
-            onClick={() => importer.current.click()}
-          >
-            <FolderOpen size={16} />
-            <span>Import</span>
-          </button>
-          <input
-            ref={importer}
-            type="file"
-            accept=".json,application/json"
-            hidden
-            onChange={async (e) => {
-              const file = e.target.files[0];
-              if (!file) return;
-              try {
-                if (file.size > 2e6)
-                  throw Error("Project file must be below 2 MB.");
-                setP(parseProject(await file.text()));
-                setSelected(null);
-                setToast("Project loaded.");
-              } catch (err) {
-                setToast(err.message);
-              }
-              e.target.value = "";
-            }}
-          />
-          <button
-            className="secondary compact"
-            onClick={saveNamedProject}
+            disabled={saving||!!moveReview}
+            onClick={()=>saveNamedProject()}
           >
             <Save size={16} />
-            <span>Save project</span>
+            {saving?'Saving…':'Save project'}
           </button>
+          <button className="secondary compact" disabled={saving||!!moveReview} onClick={()=>saveNamedProject(true)}>Save as copy</button>
           <button
             className="secondary compact"
             title="Download project JSON"
@@ -1400,7 +1360,8 @@ function App({account}) {
           </button>
         </div>
       </header>
-      {cloudOpen&&<Suspense fallback={<div className="cloud-panel">Loading cloud workspace…</div>}><CloudPanel project={p} onProject={setP} onClose={()=>setCloudOpen(false)} pack={pack} hasPreview={!!moveReview}/></Suspense>}
+      {saveError&&<div role="alert" className="workspace-alert">{saveError} Use Save as copy to preserve a conflicting draft as a separate project.</div>}
+      {cloudOpen&&<Suspense fallback={<div className="cloud-panel">Loading project files…</div>}><CloudPanel project={p} onClose={()=>setCloudOpen(false)} pack={pack}/></Suspense>}
       <nav className="steps" aria-label="Design steps">
         {STEPS.map(([name, Icon], i) => (
           <button
@@ -1776,7 +1737,7 @@ function App({account}) {
         </div>
       )}
       <footer>
-        <span>CODEX KITCHEN / UAT 1 · local design workspace</span>
+        <span>CODEX KITCHEN / Business trial · review before production</span>
         <button
           className="text"
           onClick={() => {
@@ -1785,7 +1746,7 @@ function App({account}) {
                 "Replace this device’s current design with the UAT example? Save your project first if you need it.",
               )
             ) {
-              setP(initialProject());
+              setP(old=>({...initialProject(),name:old.name,projectId:old.projectId,cloud:old.cloud}));
               setSelected(null);
               setStep(0);
               setToast("UAT example restored.");
@@ -1807,4 +1768,8 @@ function App({account}) {
     </div>
   );
 }
-createRoot(document.getElementById("root")).render(<AuthGate>{account=><App key={account.user.id} account={account}/>}</AuthGate>);
+function Workspace({account}){
+  const [active,setActive]=useState(null);
+  return active?<App key={projectIdentity(active.document)} account={account} initialDocument={active.document} initialDirty={active.dirty} onDashboard={()=>setActive(null)}/>:<Dashboard account={account} onOpen={setActive}/>;
+}
+createRoot(document.getElementById("root")).render(<AuthGate>{account=><Workspace key={account.user.id} account={account}/>}</AuthGate>);

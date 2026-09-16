@@ -10,6 +10,7 @@ import {projects,assets,members,loginAlerts} from './schema.js';
 import {staffInput,neonAdmin,enforceVerification,mailConfigured,deliverAlert,recordActivity} from './auth-service.js';
 import {authenticate,HttpError,validId,fileInput,readJson,FILE_TYPES} from './security.js';
 import {parseProject} from '../src/model.js';
+import {projectAction} from './project-actions.js';
 
 const json=(res,status,data)=>{res.statusCode=status;res.setHeader('Content-Type','application/json');res.end(JSON.stringify(data));};
 export const owned=(table,user,id)=>user.admin?eq(table.id,validId(id)):and(eq(table.ownerId,user.id),eq(table.id,validId(id)));
@@ -26,11 +27,11 @@ async function approvedUser(db,req){
   if(!member.admin&&member.status!=='active')throw new HttpError(403,'Your account needs administrator approval.');
   enforceVerification(member,user);return {...user,admin:member.admin};
 }
-async function projectFor(db,user,id){const [p]=await db.select().from(projects).where(owned(projects,user,id)).limit(1);if(!p)throw new HttpError(404,'Project not found.');return p;}
+async function projectFor(db,user,id,includeTrash=false){const [p]=await db.select().from(projects).where(owned(projects,user,id)).limit(1);if(!p)throw new HttpError(404,'Project not found.');if(p.document._workspace?.deletedAt&&!includeTrash)throw new HttpError(409,'Project is in Trash. Restore it from the dashboard first.');return p;}
 async function assetFor(db,user,id){const [a]=await db.select().from(assets).where(owned(assets,user,id)).limit(1);if(!a)throw new HttpError(404,'File not found.');return a;}
 function cleanProject(document){
   let clean;try{clean=parseProject(JSON.stringify(document));}catch(error){throw new HttpError(400,error.message);}
-  delete clean.cloud;return clean;
+  delete clean.cloud;delete clean._workspace;return clean;
 }
 async function completeAsset(db,user,id){
   requireStorage();const asset=await assetFor(db,user,id);
@@ -115,8 +116,17 @@ export default async function cloud(req,res){
     if(!member.admin&&member.status!=='active')throw new HttpError(403,'Your account needs administrator approval.');
     enforceVerification(member,user);
     if(op==='projects'&&method==='GET'){
-      const rows=await db.select({id:projects.id,ownerId:projects.ownerId,owner:members.username,name:projects.name,revision:projects.revision,updatedAt:projects.updatedAt}).from(projects).leftJoin(members,eq(projects.ownerId,members.id)).where(user.admin?undefined:eq(projects.ownerId,user.id)).orderBy(desc(projects.updatedAt)).limit(100);
-      return json(res,200,{projects:rows});
+      const trash=url.searchParams.get('trash')==='true',offset=Math.max(0,Math.min(100000,Number(url.searchParams.get('offset'))||0));
+      const archived=sql`${projects.document}->'_workspace'->>'deletedAt'`;
+      const rows=await db.select({id:projects.id,ownerId:projects.ownerId,owner:members.username,name:projects.name,revision:projects.revision,updatedAt:projects.updatedAt}).from(projects).leftJoin(members,eq(projects.ownerId,members.id)).where(and(user.admin?undefined:eq(projects.ownerId,user.id),trash?sql`${archived} is not null`:sql`${archived} is null`)).orderBy(desc(projects.updatedAt),projects.id).limit(101).offset(Math.floor(offset));
+      return json(res,200,{projects:rows.slice(0,100),hasMore:rows.length>100});
+    }
+    if(op==='project'&&method==='PATCH'){
+      const id=validId(url.searchParams.get('id')),body=await readJson(req,4096),existing=await projectFor(db,user,id,true);
+      const patch=projectAction(existing,body);
+      const [saved]=await db.update(projects).set({...patch,revision:sql`${projects.revision}+1`,updatedAt:new Date()}).where(and(owned(projects,user,id),eq(projects.revision,body.revision))).returning();
+      if(!saved)throw new HttpError(409,'Project changed. Refresh the dashboard and try again.');
+      await recordActivity(db,user,`project_${body.action}`,id);return json(res,200,{project:saved});
     }
     if(op==='project'&&method==='GET'){const saved=await projectFor(db,user,url.searchParams.get('id'));await recordActivity(db,user,'project_opened',saved.id);return json(res,200,{project:saved});}
     if(op==='project'&&['POST','PUT'].includes(method)){

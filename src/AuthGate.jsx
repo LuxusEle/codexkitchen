@@ -1,6 +1,7 @@
 import React,{useEffect,useState} from 'react';
 import {authClient,cloudRequest} from './cloud-client.js';
 import './cloud.css';
+import ThemeToggle from './ThemeToggle.jsx';
 export default function AuthGate({children}){
   const [account,setAccount]=useState(null),[loading,setLoading]=useState(true),[busy,setBusy]=useState(false),[message,setMessage]=useState(''),[username,setUsername]=useState(''),[password,setPassword]=useState(''),[otp,setOtp]=useState('');
   async function refresh(){
@@ -14,7 +15,7 @@ export default function AuthGate({children}){
   const needsVerification=account?.member.requireEmailVerification&&!account.user.emailVerified;
   const allowed=account&&(account.member.admin||account.member.status==='active')&&!needsVerification;
   if(allowed)return children(account);
-  return <main className="login-screen"><section className="login-card"><p className="eyebrow">CODEXKITCHEN · STAFF WORKSPACE</p><h1>Sign in to your kitchen studio</h1>
+  return <main className="login-screen"><section className="login-card"><ThemeToggle/><p className="eyebrow">CODEXKITCHEN · STAFF WORKSPACE</p><h1>Sign in to your kitchen studio</h1>
     <p>The editor is available only to authorised staff. Your administrator manages usernames and access.</p>
     {message&&<p role="alert" className="cloud-message">{message}</p>}
     {loading?<p>Checking your session…</p>:account?<>
