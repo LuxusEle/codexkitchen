@@ -278,7 +278,7 @@ export function validateUnits(p, units) {
     if(u.hoodType!==undefined&&(u.type!=='cooker'||!['cassette','column'].includes(u.hoodType)))errors.push(`Invalid hood style for ${u.id}.`);
     if(u.type==='cooker'&&Math.abs(u.w-TYPES.cooker.w)>.1)errors.push(`Cooker ${u.id} width is fixed at ${TYPES.cooker.w} mm; the hood follows the same width.`);
     if(u.type==='sink'&&Math.abs(u.w-TYPES.sink.w)>.1&&!u.widthAdjustmentApproved)errors.push(`Sink ${u.id} width is fixed at ${TYPES.sink.w} mm unless a minor space-resolver adjustment is approved.`);
-    const accessWidth=u.w-(u.type==='corner'?625:u.type==='wallCorner'?375:0);
+    const accessWidth=u.w-(u.compactCorner?0:u.type==='corner'?625:u.type==='wallCorner'?375:0);
     if(u.doorDivisions>0&&u.type!=='drawers'&&u.frontLayout!=='drawers'&&u.frontLayout!=='open'&&(accessWidth/u.doorDivisions-3)<=90)errors.push(`Door divisions for ${u.id} leave a leaf too narrow for the 45 mm sash.`);
     if((u.type==='drawers'||u.frontLayout==='drawers')&&(u.h-44-((u.doorDivisions||3)-1)*3)/(u.doorDivisions||3)<=122)errors.push(`Drawer divisions for ${u.id} leave a front too short for the sash and handle.`);
     if(u.type==='oven'&&u.h<1800)errors.push(`Oven tower ${u.id} needs at least 1800 mm height for its appliance and front divisions.`);
@@ -372,16 +372,17 @@ export function solve(p) {
     D: [25, p.room.depth - 25],
   };
   if (["L", "U"].includes(p.room.layout)) {
-    if (p.room.width < 2200 || p.room.depth < 1900)
+    if (p.room.layout==='U'&&(p.room.width < 2200 || p.room.depth < 1900))
       return {
         units: [],
         errors: ["This corner arrangement needs at least 2200 × 1900 mm."],
         unmet: [],
         warnings: [],
       };
-    add("corner", "A", p.room.width - 1075, 1075, { hand: "right" });
-    reserve.A[1] = p.room.width - 1075;
-    reserve.B[0] = 675;
+    const compactCorner=p.room.layout==='L'&&(p.room.width<2200||p.room.depth<1900),cornerWidth=compactCorner?600:1075,returnStart=compactCorner?600:675;
+    add("corner", "A", p.room.width - cornerWidth, cornerWidth, { hand: "right",compactCorner });
+    reserve.A[1] = p.room.width - cornerWidth;
+    reserve.B[0] = returnStart;
   }
   if (p.room.layout==='U') {
     if (p.room.width < 3000)
@@ -452,11 +453,13 @@ export function solve(p) {
             for(const domain of legalRunSpans(p,units,wall,false)) {
               const lo=Math.max(a,domain[0]+300),hi=Math.min(b-t.w,domain[1]-t.w-300);
               if(lo>hi+.1)continue;
-              x=Math.max(lo,Math.min(hi,a+(b-a-t.w)/2));
-              const sink=units.find(u=>u.type==='sink'&&u.wall===wall),runMiddle=(domain[0]+domain[1])/2;
-              let cookerScore=score+Math.abs(x+t.w/2-runMiddle)/1000+(wall==='B'?-1.5:0);
-              if(sink&&Math.abs((x+t.w/2)-(sink.x+sink.w/2))<600)cookerScore+=5;
-              candidates.push({wall,x,w:t.w,score:cookerScore});
+              const compactCorner=p.room.layout==='L'&&(p.room.width<2200||p.room.depth<1900),positions=compactCorner?[lo,hi]:[Math.max(lo,Math.min(hi,a+(b-a-t.w)/2))];
+              for(x of [...new Set(positions)]){
+                const sink=units.find(u=>u.type==='sink'&&u.wall===wall),runMiddle=(domain[0]+domain[1])/2;
+                let cookerScore=score+Math.abs(x+t.w/2-runMiddle)/1000+(wall==='B'?-1.5:0);
+                if(sink&&Math.abs((x+t.w/2)-(sink.x+sink.w/2))<600)cookerScore+=5;
+                candidates.push({wall,x,w:t.w,score:cookerScore});
+              }
             }
             continue;
           }
@@ -576,8 +579,8 @@ function addUpperCorners(p, units, add) {
   if(p.upperWalls&&!p.upperWalls.includes('A'))return;
   for (const hand of p.room.layout==='U' ? ["right", "left"] : ["right"]) {
     if(p.upperWalls&&!p.upperWalls.includes(hand==='right'?'B':'D'))continue;
-    const t = cabinetDefaults(p,'wallCorner'),
-      x = hand === "right" ? p.room.width - t.w : 0;
+    const t = cabinetDefaults(p,'wallCorner'),compactCorner=p.room.layout==='L'&&(p.room.width<2200||p.room.depth<1900),cornerWidth=compactCorner?t.d:t.w,
+      x = hand === "right" ? p.room.width - cornerWidth : 0;
     if (units.some((u) => u.type === "wallCorner" && u.hand === hand)) continue;
     const u = {
       ...t,
@@ -585,19 +588,21 @@ function addUpperCorners(p, units, add) {
       type: "wallCorner",
       wall: "A",
       x,
+      w:cornerWidth,
       z: t.z,
       hand,
+      compactCorner,
     };
     const blockers = [
       ...blocked(p, "A", t.z, t.h, "wall"),
       ...upperBlockers(p, units, "A"),
     ];
     if (
-      blockers.some((b) => overlap(b, [x, x + t.w])) ||
+      blockers.some((b) => overlap(b, [x, x + cornerWidth])) ||
       validateUnits(p, [...units, u]).length
     )
       continue;
-    add("wallCorner", "A", x, t.w, { hand, automatic: true });
+    add("wallCorner", "A", x, cornerWidth, { hand,compactCorner, automatic: true });
   }
 }
 function rowGaps(p, units, wall, upper) {

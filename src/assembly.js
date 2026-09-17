@@ -37,7 +37,7 @@ export function frontSpecs(u) {
     for (let i = 0; i < n; i++)
       add(1.5, y + i * (hh + 3), u.w - 3, hh, "drawer");
   } else if (["corner", "wallCorner"].includes(u.type)) {
-    const blind = u.type === "corner" ? 625 : 375;
+    const blind = u.compactCorner ? 0 : u.type === "corner" ? 625 : 375;
     const width=u.w-blind,count=divisions(width>600?2:1);
     for(const [i,leaf] of frontDivision(width,count).entries())
       add((u.hand==='left'?blind:0)+leaf.x,y,leaf.w,h,'hinge',count===1?(u.hand==='left'?'right':'left'):(i%2?'right':'left'));
@@ -367,7 +367,7 @@ export function carcassParts(p, units) {
       panel("Continuous rear cladding", r - l, H-2*ph, t, l, bottom+ph, frameBack+pw);
   }
   for (const u of units) {
-    const isCorner = ["corner", "wallCorner"].includes(u.type);
+    const isCorner = ["corner", "wallCorner"].includes(u.type)&&!u.compactCorner;
     if (u.type !== "filler" && !isCorner) continue;
     const w = isCorner ? (u.type === "corner" ? 625 : 375) : u.w;
     parts.push({

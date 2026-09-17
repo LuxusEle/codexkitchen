@@ -1,8 +1,19 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {initialProject,solve,roomErrors,validateUnits,parseProject,renderingPrompt,wallPoint,subtract,footprint,islandSettings,legalRunSpans} from '../src/model.js';
-import {countertopPieces} from '../src/construction.js';
+import {countertopPieces,frameRuns} from '../src/construction.js';
+import {frontSpecs,carcassParts} from '../src/assembly.js';
 test('Default L kitchen places all requirements within the room',()=>{const p=initialProject(),r=solve(p);assert.deepEqual(r.errors,[]);assert.deepEqual(r.unmet,[]);for(const [type,count]of Object.entries(p.needs))assert.ok(r.units.filter(u=>u.type===type).length>=count,type);assert.equal(r.units.filter(u=>u.type==='corner').length,1)});
+test('1980 Ã— 2260 compact L uses one continuous aluminum box per wall',()=>{
+  const p=initialProject();p.room={width:1980,depth:2260,height:2700,layout:'L'};p.openings=[];
+  const r=solve(p),corner=r.units.find(u=>u.type==='corner'),upperCorner=r.units.find(u=>u.type==='wallCorner'),baseRuns=frameRuns(r.units).filter(run=>run.z===0&&['A','B'].includes(run.wall));
+  assert.deepEqual(r.errors,[]);assert.deepEqual(r.unmet,[]);
+  assert.equal(corner.w,600);assert.equal(corner.x,1380);assert.equal(corner.compactCorner,true);
+  assert.ok(r.units.filter(u=>u.wall==='B'&&u.z<900).every(u=>u.x>=600));
+  assert.equal(upperCorner.w,350);assert.equal(upperCorner.compactCorner,true);
+  assert.deepEqual(baseRuns.map(run=>run.wall).sort(),['A','B']);
+  assert.ok(frontSpecs(corner).length>0);assert.ok(!carcassParts(p,r.units).some(part=>part.name==='Blind corner closure'&&part.unitIds?.includes(corner.id)));
+});
 test('U kitchen creates two corners and keeps all requested appliances',()=>{const p=initialProject();p.room.layout='U';const r=solve(p);assert.deepEqual(r.errors,[]);assert.deepEqual(r.unmet,[]);assert.equal(r.units.filter(u=>u.type==='corner').length,2)});
 test('Galley arrangement respects doorway and has no overlapping units',()=>{const p=initialProject();p.room.layout='GALLEY';const r=solve(p);assert.deepEqual(r.errors,[]);assert.deepEqual(r.unmet,[])});
 test('Straight layout explicitly reports unplaced upper storage when tall appliances are requested',()=>{const p=initialProject();p.needs.oven=1;p.needs.fridge=1;p.room.layout='I';const r=solve(p);assert.ok(r.unmet.includes('Wall cabinet'));assert.ok(r.units.some(u=>u.type==='sink'));assert.ok(r.units.some(u=>u.type==='oven'))});
