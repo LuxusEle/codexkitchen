@@ -54,7 +54,7 @@ export default function BoxChooser({p,plan,selected,onSelect,disabled,onApply}) 
   const chips=BOX_TYPES.filter(t=>p.needs[t]>0||p.boxCounts?.[t]>0),upperWalls=p.upperWalls||activeWalls(p.room.layout),wallNames={A:'rear',B:'right',C:'front',D:'left'};
   return <section className="box-toolbar" aria-label="Cabinet requirements">
     <button className="secondary compact" disabled={disabled} onClick={()=>setDraft(boxBrief(p))}><SlidersHorizontal size={16}/>Choose boxes</button>
-    <div className="upper-wall-chips" aria-label="Choose walls with top cabinets"><span>Top cabinets</span>{activeWalls(p.room.layout).map(w=>{
+    <div className="upper-wall-chips" aria-label="Choose walls with top cabinets"><span className="edit-tops-cue">Edit tops</span>{activeWalls(p.room.layout).map(w=>{
       const on=upperWalls.includes(w);
       return <button key={w} className={`box-chip ${on?'active':'no-top'}`} disabled={disabled} aria-pressed={on} title={`Wall ${w} (${wallNames[w]}): ${on?'top cabinets allowed':'no top cabinets'}. Click to preview changing it.`} onClick={()=>setDraft(toggleUpperWall(boxBrief(p),w,!on))}>Wall {w} · {on?'Top':'No top'}</button>;
     })}<em>Island/bar · No top</em></div>
