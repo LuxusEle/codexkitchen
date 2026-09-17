@@ -1,7 +1,7 @@
 import React,{useEffect,useMemo,useRef,useState} from 'react';
 import {Box,Check,SlidersHorizontal,X} from 'lucide-react';
 import {BOX_TYPES,FIXED_WIDTH_TYPES,TYPES,activeWalls,cabinetDefaults,minimumCabinetWidth,maximumCabinetWidth} from './model.js';
-import {boxBrief,toggleBriefBox,previewBoxBrief} from './box-brief.js';
+import {boxBrief,toggleBriefBox,toggleUpperWall,previewBoxBrief} from './box-brief.js';
 import LengthInput,{MeasurementSwitch,checkLengthInputs} from './LengthInput.jsx';
 import './box-chooser.css';
 
@@ -38,7 +38,7 @@ function BoxDialog({p,initial,onClose,onApply}) {
         </div>;
       })}
     </fieldset>)}
-    <fieldset className="box-group"><legend>Walls with upper cabinets</legend><div className="box-wall-options">{activeWalls(p.room.layout).map(w=><label key={w}><input type="checkbox" checked={draft.upperWalls.includes(w)} onChange={e=>setDraft(old=>({...old,upperWalls:e.target.checked?[...old.upperWalls,w]:old.upperWalls.filter(x=>x!==w)}))}/> Wall {w}</label>)}</div><p className="muted">For your reference: cooker on A, sink on B, and upper cabinets on A only. Enter the measured window on B in Openings; sill = 1000 mm.</p></fieldset>
+    <fieldset className="box-group"><legend>Walls with upper cabinets</legend><div className="box-wall-options">{activeWalls(p.room.layout).map(w=><label key={w}><input type="checkbox" checked={draft.upperWalls.includes(w)} onChange={e=>setDraft(old=>toggleUpperWall(old,w,e.target.checked))}/> Wall {w}</label>)}</div><p className="muted">Untick any wall that must remain open above the worktop, including a window wall. Untick every wall for a design with no top cabinets. Islands and breakfast bars never receive top cabinets.</p></fieldset>
     <section className="box-preview" aria-label="Proposed cabinet arrangement">
       <h3>Review before applying · {plan.units.length} boxes / closures</h3>
       {plan.errors.length>0&&<div className="box-issues" role="alert"><strong>Resolve these before applying</strong><ul>{plan.errors.map((e,i)=><li key={i}>{e}</li>)}</ul></div>}
@@ -51,9 +51,13 @@ function BoxDialog({p,initial,onClose,onApply}) {
 
 export default function BoxChooser({p,plan,selected,onSelect,disabled,onApply}) {
   const [draft,setDraft]=useState(null);
-  const chips=BOX_TYPES.filter(t=>p.needs[t]>0||p.boxCounts?.[t]>0);
+  const chips=BOX_TYPES.filter(t=>p.needs[t]>0||p.boxCounts?.[t]>0),upperWalls=p.upperWalls||activeWalls(p.room.layout),wallNames={A:'rear',B:'right',C:'front',D:'left'};
   return <section className="box-toolbar" aria-label="Cabinet requirements">
     <button className="secondary compact" disabled={disabled} onClick={()=>setDraft(boxBrief(p))}><SlidersHorizontal size={16}/>Choose boxes</button>
+    <div className="upper-wall-chips" aria-label="Choose walls with top cabinets"><span>Top cabinets</span>{activeWalls(p.room.layout).map(w=>{
+      const on=upperWalls.includes(w);
+      return <button key={w} className={`box-chip ${on?'active':'no-top'}`} disabled={disabled} aria-pressed={on} title={`Wall ${w} (${wallNames[w]}): ${on?'top cabinets allowed':'no top cabinets'}. Click to preview changing it.`} onClick={()=>setDraft(toggleUpperWall(boxBrief(p),w,!on))}>Wall {w} · {on?'Top':'No top'}</button>;
+    })}<em>Island/bar · No top</em></div>
     <div className="box-chips">{chips.map(type=>{
       const on=p.needs[type]>0,t=cabinetDefaults(p,type);
       return <button key={type} className={`box-chip ${on?'active':''}`} disabled={disabled} aria-pressed={on} title={`${t.name}: ${t.w} × ${t.h} mm defaults. Click to review turning ${on?'off':'on'}.`} onClick={()=>setDraft(toggleBriefBox(boxBrief(p),type,!on))}><Box size={13}/>{t.name} <span>{on?`×${p.needs[type]}`:'Off'}</span></button>;

@@ -1014,8 +1014,10 @@ function missing(p, units) {
   );
 }
 export function renderingPrompt(p, plan) {
+  const enabledUpperWalls=p.upperWalls||activeWalls(p.room.layout),disabledUpperWalls=activeWalls(p.room.layout).filter(w=>!enabledUpperWalls.includes(w)),
+    upperRule=`Upper cabinets are allowed only on ${enabledUpperWalls.length?enabledUpperWalls.map(w=>`wall ${w}`).join(', '):'no room walls'}. ${disabledUpperWalls.length?`Keep ${disabledUpperWalls.map(w=>`wall ${w}`).join(', ')} completely free of upper/top cabinets.`:''} Islands and breakfast bars have no overhead cabinets; pendant lights are permitted.`;
   const hoodNotes=plan.units.filter(u=>u.type==='cooker').map(u=>`${u.id}: ${u.hoodType==='column'?'column/chimney cooker hood with exposed vertical chimney':'slim cassette cooker hood; no exposed vertical chimney'}. Preserve this hood style.`).join('\n');
-  const units = hoodNotes+'\n'+plan.units
+  const units = upperRule+'\n'+hoodNotes+'\n'+plan.units
     .map(
       (u) =>
         `${u.id}: ${TYPES[u.type].name}, ${u.wall === "Island" ? `${u.featureKind==='breakfast'?'breakfast bar':'island'} at ${Math.round(u.islandX??u.ix)},${Math.round(u.islandY??u.iy)} mm, rotation ${u.islandRotation||0}°` : `wall ${u.wall} at ${Math.round(u.x)} mm`}, W${Math.round(u.w)} × H${u.h} × D${u.d} mm, bottom ${u.z} mm; fronts ${u.frontLayout==='open'?'open shelves':u.type==='drawers'||u.frontLayout==='drawers'?'drawers':'doors'}, infill ${u.frontMaterial||(u.type==='glass'?'glass':'acp')}, colour ${u.frontColor||p.style.front}, divisions ${u.doorDivisions||'automatic'}`,

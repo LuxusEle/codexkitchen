@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {initialProject,solve,parseProject,validateUnits,renderingPrompt,repairCabinetSpace} from '../src/model.js';
-import {boxBrief,toggleBriefBox,previewBoxBrief} from '../src/box-brief.js';
+import {boxBrief,toggleBriefBox,toggleUpperWall,previewBoxBrief} from '../src/box-brief.js';
 import {frontSpecs,carcassParts} from '../src/assembly.js';
 import {fabricationPlan} from '../src/fabrication.js';
 
@@ -50,6 +50,19 @@ test('Box toggles retain count and dimensions, preview is non-mutating, settings
   assert.ok(plan.units.filter(u=>u.z>=900&&u.type!=='filler').every(u=>u.h===800&&u.doorDivisions===1));
   const approved={...project,units:plan.units},loaded=parseProject(JSON.stringify(approved));
   assert.deepEqual(loaded.unitDefaults,on.unitDefaults);assert.deepEqual(loaded.boxCounts,on.boxCounts);assert.deepEqual(loaded.upperWalls,['A']);
+});
+test('Per-wall top controls support window walls and a completely open upper zone',()=>{
+  const p=compact(),draft=boxBrief(p),wallCount=draft.needs.wall;
+  const none=toggleUpperWall(draft,'A',false);
+  assert.deepEqual(none.upperWalls,[]);assert.equal(none.needs.wall,0);assert.equal(none.boxCounts.wall,wallCount);
+  const noTop=previewBoxBrief(p,none);
+  assert.ok(!noTop.plan.units.some(u=>u.z>=900));assert.deepEqual(noTop.plan.unmet,[]);
+  assert.match(renderingPrompt(noTop.project,noTop.plan),/no room walls/i);
+  assert.match(renderingPrompt(noTop.project,noTop.plan),/Islands and breakfast bars have no overhead cabinets/i);
+  const restored=toggleUpperWall(none,'B',true),preview=previewBoxBrief(p,restored);
+  assert.equal(restored.needs.wall,wallCount);assert.deepEqual(restored.upperWalls,['B']);
+  assert.ok(preview.plan.units.filter(u=>u.z>=900).every(u=>u.wall==='B'));
+  assert.match(renderingPrompt(preview.project,preview.plan),/Keep wall A completely free/i);
 });
 test('Chooser rejects invalid sizes and quantities and never stretches fixed appliance widths',()=>{
   for(const [type,custom] of [['cooker',{w:650}],['sink',{w:850}],['spice',{w:100}],['wall',{h:150}],['base',{doorDivisions:7}]]){
