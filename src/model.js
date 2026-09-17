@@ -124,6 +124,9 @@ export function initialProject() {
       overhang: 300,
       pendants: 3,
       slatted: true,
+      endTreatment: "none",
+      featureEnd: "start",
+      rackWidth: 300,
     },
     style: {
       front: "#c2c9c6",
@@ -148,6 +151,9 @@ export function islandSettings(p) {
     kind,width,depth,physicalDepth,footprintW,footprintD,rotation,overhang,
     pendants:Math.max(1,Math.min(5,Math.round(Number(raw.pendants)||3))),
     slatted:raw.slatted!==false,
+    endTreatment:['openRack','upperReturn'].includes(raw.endTreatment)?raw.endTreatment:'none',
+    featureEnd:raw.featureEnd==='end'?'end':'start',
+    rackWidth:Math.max(250,Math.min(600,Number(raw.rackWidth)||300)),
     x:Number.isFinite(raw.x)?Math.max(0,Math.min(p.room.width-footprintW,raw.x)):(p.room.width-footprintW)/2,
     y:Number.isFinite(raw.y)?Math.max(0,Math.min(p.room.depth-footprintD,raw.y)):(p.room.depth-footprintD)/2,
   };
@@ -497,6 +503,14 @@ export function solve(p) {
     const c=islandSettings(p),bayCount=Math.max(1,Math.ceil(c.width/600)),bayW=c.width/bayCount,
       common={ix:c.x,iy:c.y,islandX:c.x,islandY:c.y,islandRotation:c.rotation,islandWidth:c.width,islandOverhang:c.overhang,islandPhysicalDepth:c.physicalDepth,featureKind:c.kind,d:c.depth};
     for(let i=0;i<bayCount;i++)add(i===0?"drawers":"base","Island",i*bayW,bayW,common);
+    if(c.kind==='breakfast'&&c.endTreatment==='openRack'){
+      const x=c.featureEnd==='end'?c.width-c.rackWidth:0;
+      add('open','Island',x,c.rackWidth,{...common,z:900,h:1200,d:350,frontLayout:'open',featureKind:'bar-open-rack',shelfCount:3,automatic:true});
+    }
+    if(c.kind==='breakfast'&&c.endTreatment==='upperReturn'){
+      const count=Math.max(1,Math.ceil(c.width/1200)),w=c.width/count;
+      for(let i=0;i<count;i++)add('wall','Island',i*w,w,{...common,z:1450,h:cabinetDefaults(p,'wall').h,d:350,featureKind:'bar-upper-return',automatic:true});
+    }
   }
   const problems = validateUnits(p, units);
   const warnings = [];
@@ -1027,7 +1041,7 @@ export function renderingPrompt(p, plan) {
       (u) =>
         `${u.id}: ${TYPES[u.type].name}, ${u.wall === "Island" ? `${u.featureKind==='breakfast'?'breakfast bar':'island'} at ${Math.round(u.islandX??u.ix)},${Math.round(u.islandY??u.iy)} mm, rotation ${u.islandRotation||0}°` : `wall ${u.wall} at ${Math.round(u.x)} mm`}, W${Math.round(u.w)} × H${u.h} × D${u.d} mm, bottom ${u.z} mm; fronts ${u.frontLayout==='open'?'open shelves':u.type==='drawers'||u.frontLayout==='drawers'?'drawers':'doors'}, infill ${u.frontMaterial||(u.type==='glass'?'glass':'acp')}, colour ${u.frontColor||p.style.front}, divisions ${u.doorDivisions||'automatic'}`,
     )
-    .join("\n")+(p.island&&islandSettings(p).kind==='breakfast'?`\nBREAKFAST BAR: dark stone overhang, warm vertical timber-slat outer face and ${islandSettings(p).pendants} warm glass pendant lights matching the supplied references; retain aluminum construction and fronts on the working side.`:'')+`\nIMAGE REFERENCE KEY: use all wall A/B/C/D elevations plus the island elevation when supplied. Isometric labels are cabinet ID / W(width mm) and map directly to this schedule.`;
+    .join("\n")+(p.island&&islandSettings(p).kind==='breakfast'?`\nBREAKFAST BAR: dark stone overhang, warm vertical timber-slat outer face and ${islandSettings(p).pendants} warm glass pendant lights matching the supplied references; retain aluminum construction and fronts on the working side. End treatment: ${islandSettings(p).endTreatment==='openRack'?`open display rack at the ${islandSettings(p).featureEnd==='end'?'far':'start'} end`:islandSettings(p).endTreatment==='upperReturn'?'perpendicular upper cabinet row continuing to the outer bar edge':'open end with no rack or overhead continuation'}.`:'')+`\nIMAGE REFERENCE KEY: use all wall A/B/C/D elevations plus the island elevation when supplied. Isometric labels are cabinet ID / W(width mm) and map directly to this schedule.`;
   return `Create a photorealistic visualization using the attached CODEX KITCHEN reference images.\n\nREFERENCE PRIORITY\nPerspective = camera and visible design. Plan = positions and dimensions. Elevations = exact front divisions. Frame view = aluminum construction. Preserve the room, cabinet count, proportions, corner ownership, appliances, openings and camera angle. Do not add, remove or relocate cabinets. Render materials and lighting, not a new layout.\n\nPROJECT: ${p.name}\nRoom: ${p.room.width} × ${p.room.depth} × ${p.room.height} mm. Layout: ${p.room.layout}. Walls A rear, B right, C front, D left (clockwise).\nOpenings: ${p.openings.map((o) => `${o.kind} wall ${o.wall}, offset ${o.x}, width ${o.w}, height ${o.h}, sill ${o.sill} mm`).join("; ") || "none"}.\n\nCONSTRUCTION\n${p.style.mode} aluminum frame, 25.4 × 38.1 mm hollow box bar, wall 1.2 mm; 3 mm ACP; 45 mm sash face and 21.2 mm sash depth; 3 mm front reveals. Keep shared run members continuous. Frame finish ${p.style.frame}; front color ${p.style.front}, ${p.style.finish}; countertop ${p.style.counter}; wall ${p.style.wall}. Glass display fronts remain glass.\nLighting: ${p.style.lighting}. Setting: ${p.style.scene}.\n\nCABINET SCHEDULE\n${units}\n\n${plan.errors.length || plan.unmet.length ? "UNRESOLVED DESIGN: " + [...plan.errors, ...plan.unmet.map((x) => "Unplaced " + x)].join("; ") : "Design passed UAT room/footprint checks."}\nSite notes: ${p.notes || "None"}.\n\nOutput a clean high-resolution architectural interior image, realistic aluminum reflections and ACP texture, straight verticals and believable appliance scale. Do not draw dimensions or labels on the final image. Ask about conflicts between references instead of inventing changes. These are UAT design references, not approved fabrication drawings.`;
 }
 export function parseProject(text) {

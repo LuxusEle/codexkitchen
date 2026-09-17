@@ -210,14 +210,15 @@ export function carcassParts(p, units) {
     let shelfSpan=null;
     const finishShelfSpan=()=>{
       if(!shelfSpan)return;
-      const a=Math.max(frameStart,shelfSpan[0]),b=Math.min(frameEnd,shelfSpan[1]);
-      if(b-a>2*pw+.1)shelfSpans.push([a,b]);
+      const a=Math.max(frameStart,shelfSpan.start),b=Math.min(frameEnd,shelfSpan.end);
+      if(b-a>2*pw+.1)shelfSpans.push({a,b,count:shelfSpan.count});
       shelfSpan=null;
     };
     for(const u of run.units){
       if(!shelfAllowed(u)){finishShelfSpan();continue;}
-      if(!shelfSpan||u.x>shelfSpan[1]+.1){finishShelfSpan();shelfSpan=[u.x,u.x+u.w];}
-      else shelfSpan[1]=Math.max(shelfSpan[1],u.x+u.w);
+      const count=Number.isInteger(u.shelfCount)?Math.max(1,Math.min(6,u.shelfCount)):1;
+      if(!shelfSpan||u.x>shelfSpan.end+.1){finishShelfSpan();shelfSpan={start:u.x,end:u.x+u.w,count};}
+      else {shelfSpan.end=Math.max(shelfSpan.end,u.x+u.w);shelfSpan.count=Math.max(shelfSpan.count,count);}
     }
     finishShelfSpan();
     // Continuous top/bottom rails; joins at long spans are review-only, not hidden.
@@ -235,23 +236,25 @@ export function carcassParts(p, units) {
       for (const yy of [bottom, bottom + H - ph])
         bar("Cross rail", pw, ph, frameDepth - 2 * pw, x, yy, frameBack+pw, "z");
     }
-    for(const [shelfIndex,[a,b]] of shelfSpans.entries()){
-      const assemblyId=`${runId}-SHELF-${shelfIndex+1}`,
-        extra={assemblyId,assemblyType:'shelf-frame'},
-        y=bottom+H/2,
-        shelfBack=frameBack+pw+t,
-        shelfFront=frameFront-pw,
-        crossDepth=shelfFront-shelfBack-pw;
-      // Rear + front rails and left + right rails are a true four-sided frame.
-      // The rear rail sits immediately in front of the 3 mm rear liner.
-      bar('Shelf rear rail',b-a,ph,pw,a,y,shelfBack,'x',extra);
-      bar('Shelf front rail',b-a,ph,pw,a,y,shelfFront,'x',extra);
-      bar('Shelf left rail',pw,ph,crossDepth,a,y,shelfBack+pw,'z',extra);
-      bar('Shelf right rail',pw,ph,crossDepth,b-pw,y,shelfBack+pw,'z',extra);
-      // Long shelves may use cabinet-division cross members, but both ends of
-      // every such member terminate into the front and rear perimeter rails.
-      for(const x of posts.filter(x=>x>a+pw+.1&&x<b-2*pw-.1))
-        bar('Shelf intermediate rail',pw,ph,crossDepth,x,y,shelfBack+pw,'z',extra);
+    for(const [shelfIndex,{a,b,count}] of shelfSpans.entries()){
+      for(let level=1;level<=count;level++){
+        const assemblyId=`${runId}-SHELF-${shelfIndex+1}-${level}`,
+          extra={assemblyId,assemblyType:'shelf-frame'},
+          y=bottom+H*level/(count+1),
+          shelfBack=frameBack+pw+t,
+          shelfFront=frameFront-pw,
+          crossDepth=shelfFront-shelfBack-pw;
+        // Rear + front rails and left + right rails are a true four-sided frame.
+        // The rear rail sits immediately in front of the 3 mm rear liner.
+        bar('Shelf rear rail',b-a,ph,pw,a,y,shelfBack,'x',extra);
+        bar('Shelf front rail',b-a,ph,pw,a,y,shelfFront,'x',extra);
+        bar('Shelf left rail',pw,ph,crossDepth,a,y,shelfBack+pw,'z',extra);
+        bar('Shelf right rail',pw,ph,crossDepth,b-pw,y,shelfBack+pw,'z',extra);
+        // Long shelves may use cabinet-division cross members, but both ends of
+        // every such member terminate into the front and rear perimeter rails.
+        for(const x of posts.filter(x=>x>a+pw+.1&&x<b-2*pw-.1))
+          bar('Shelf intermediate rail',pw,ph,crossDepth,x,y,shelfBack+pw,'z',extra);
+      }
     }
     if (z === 0) {
       const assemblyId=`${runId}-PLINTH`,extra={assemblyId,assemblyType:'plinth-frame'},
@@ -353,14 +356,15 @@ export function carcassParts(p, units) {
         else if(topStart!==null){horizontal('Continuous U-notched top',topStart,topEnd,bottom+H-ph-t);topStart=null}
       }
     }
-    for(const [shelfStart,shelfEnd] of shelfSpans)
-      horizontal(
-        "Continuous U-notched shelf",
-        shelfStart+pw,
-        shelfEnd-pw,
-        bottom + H / 2 + ph,
-        {panelBack:frameBack+2*pw+t,panelFront:frameFront-pw},
-      );
+    for(const {a:shelfStart,b:shelfEnd,count} of shelfSpans)
+      for(let level=1;level<=count;level++)
+        horizontal(
+          "Continuous U-notched shelf",
+          shelfStart+pw,
+          shelfEnd-pw,
+          bottom + H*level/(count+1) + ph,
+          {panelBack:frameBack+2*pw+t,panelFront:frameFront-pw},
+        );
     // Rear liner is on the ROOM side of the rearmost posts, not behind them.
     // This is a physical 3 mm lining, not a rendering mask.
     for (const [l, r] of spans(frameStart, frameEnd))

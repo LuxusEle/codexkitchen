@@ -199,7 +199,12 @@ export function islandElevationImage(p, units) {
     for(let x=0;x<220;x+=16)ctx.fillRect(690+x,985,8,42);
     ctx.fillStyle="#163d43";
     ctx.font="18px Arial";
-    ctx.fillText(`Reverse/public face: timber slats · ${cfg.overhang} mm stone overhang · ${cfg.pendants} pendant lights`,900,1020);
+    const endNote=cfg.endTreatment==='openRack'
+      ? `open rack ${cfg.rackWidth} mm at ${cfg.featureEnd} end`
+      : cfg.endTreatment==='upperReturn'
+        ? 'perpendicular upper row to bar edge'
+        : 'open end';
+    ctx.fillText(`Reverse/public face: timber slats · ${cfg.overhang} mm stone overhang · ${cfg.pendants} pendant lights · ${endNote}`,900,1020);
   }
   ctx.fillStyle="#163d43";
   ctx.font="22px Arial";

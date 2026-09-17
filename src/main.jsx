@@ -42,6 +42,7 @@ import BoxChooser from './BoxChooser.jsx';
 import LengthInput,{MeasurementProvider,MeasurementSwitch,checkLengthInputs} from './LengthInput.jsx';
 import QuickCabinetEditor from './QuickCabinetEditor.jsx';
 import QuoteSummary from './QuoteSummary.jsx';
+import BreakfastBarWizard from './BreakfastBarWizard.jsx';
 import {removeCabinet,canUndoCabinet} from './cabinet-actions.js';
 import {cloudRequest} from './cloud-client.js';
 import {projectIdentity,projectContent,writeDraft,removeDraft,detachedProject} from './project-workspace.js';
@@ -262,6 +263,16 @@ function Plan({ p, plan, selected, onSelect, onMoveUnit, onMoveOpening, onMoveSt
           {w}
         </text>
       ))}
+      <g className="plan-dimensions" pointerEvents="none" fill="#163d43" stroke="#163d43">
+        <line x1="0" y1="-285" x2={W} y2="-285" strokeWidth="12"/>
+        <line x1="0" y1="-335" x2="0" y2="-235" strokeWidth="12"/>
+        <line x1={W} y1="-335" x2={W} y2="-235" strokeWidth="12"/>
+        <text x={W/2} y="-315" textAnchor="middle" fontSize="105" stroke="none">{Math.round(W)} mm overall</text>
+        <line x1={W+285} y1="0" x2={W+285} y2={D} strokeWidth="12"/>
+        <line x1={W+235} y1="0" x2={W+335} y2="0" strokeWidth="12"/>
+        <line x1={W+235} y1={D} x2={W+335} y2={D} strokeWidth="12"/>
+        <text x={W+315} y={D/2} textAnchor="middle" fontSize="105" stroke="none" transform={`rotate(90 ${W+315} ${D/2})`}>{Math.round(D)} mm overall</text>
+      </g>
     </svg>
   );
 }
@@ -296,7 +307,8 @@ function App({account,initialDocument,initialDirty,onDashboard,onAdmin}) {
     [editableBoxes, setEditableBoxes] = useState([]),
     [planRow, setPlanRow] = useState('all'),
     [cloudOpen,setCloudOpen] = useState(false),
-    [customerQuoteOpen,setCustomerQuoteOpen] = useState(false);
+    [customerQuoteOpen,setCustomerQuoteOpen] = useState(false),
+    [barWizardOpen,setBarWizardOpen] = useState(false);
   const dirty=projectContent(p)!==savedContent;
   const currentProject=useRef(p);currentProject.current=p;
   const scene = useRef(),
@@ -682,15 +694,15 @@ function App({account,initialDocument,initialDirty,onDashboard,onAdmin}) {
           </button>
         ))}
       </div>
-      <label className="field">Freestanding feature
-        <select value={p.island?islandCfg.kind:'none'} onChange={e=>{const kind=e.target.value;update({island:kind!=='none',islandConfig:{...p.islandConfig,kind:kind==='breakfast'?'breakfast':'island'}},true)}}>
+      <label className="field">Island / breakfast feature
+        <select value={p.island?islandCfg.kind:'none'} onChange={e=>{const kind=e.target.value;if(kind==='breakfast'){setBarWizardOpen(true);return;}update({island:kind!=='none',islandConfig:{...p.islandConfig,kind:'island'}},true)}}>
           <option value="none">None</option><option value="island">Kitchen island</option><option value="breakfast">Breakfast bar</option>
         </select>
       </label>
       {p.island&&<div className="feature-controls">
         <button className="secondary" onClick={rotateIsland}><RotateCcw size={16}/>Rotate 90°</button>
         <span>{islandCfg.width} × {islandCfg.depth} mm · drag in Room plan to position</span>
-        {islandCfg.kind==='breakfast'&&<><Num label="Breakfast overhang" value={islandCfg.overhang} min={0} max={600} step={25} onChange={v=>update({islandConfig:{...p.islandConfig,overhang:v}})}/><label className="field">Pendant lights<select value={islandCfg.pendants} onChange={e=>update({islandConfig:{...p.islandConfig,pendants:Number(e.target.value)}})}>{[1,2,3,4,5].map(n=><option key={n}>{n}</option>)}</select></label><p className="muted">Breakfast mode adds the reference-style dark overhang, warm timber-slat outer face, ladder end detail and hanging glass lights.</p></>}
+        {islandCfg.kind==='breakfast'&&<><button className="primary" onClick={()=>setBarWizardOpen(true)}>Edit breakfast bar options</button><p className="muted">{islandCfg.endTreatment==='openRack'?`Open rack · ${islandCfg.rackWidth} mm · ${islandCfg.featureEnd} end`:islandCfg.endTreatment==='upperReturn'?'Upper row continues perpendicular to the outer bar edge':'Open bar end'} · {islandCfg.pendants} pendant lights.</p></>}
       </div>}
       <div className="tip">
         <Ruler size={18} />
@@ -1620,6 +1632,7 @@ function App({account,initialDocument,initialDirty,onDashboard,onAdmin}) {
               <div className="row between">
                 <h3>Room plan</h3>
                 <div className="row">
+                  <span className="room-overall">{Math.round(p.room.width)} × {Math.round(p.room.depth)} mm overall</span>
                   <span>{((p.room.width * p.room.depth) / 1e6).toFixed(1)} m²</span>
                   <button
                     className={dragEnabled?"primary compact":"secondary compact"}
@@ -1713,6 +1726,7 @@ function App({account,initialDocument,initialDirty,onDashboard,onAdmin}) {
       </main>
       {unit&&quickAnchor&&!moveReview&&!changeApproval&&!gapFix&&<QuickCabinetEditor key={unit.id} unit={unit} anchor={quickAnchor} project={p} issues={plan.errors} onEdit={editUnit} onClose={()=>setQuickAnchor(null)} onDelete={deleteSelectedCabinet} onMove={()=>{setQuickAnchor(null);setDragEnabled(true);if(['door','run'].includes(mode))setMode('finished');setToast(`Move active: drag ${unit.id} in 3D or plan; review and OK the result.`);}} onMore={()=>{setQuickAnchor(null);setStep(4);setTimeout(()=>document.querySelector('.unit-editor')?.scrollIntoView({behavior:'smooth',block:'center'}),0);}} onFit={()=>{setQuickAnchor(null);runGapAudit();}}/>}
       {customerQuoteOpen&&<Suspense fallback={<div className="cabinet-undo" role="status">Loading customer quotation builder…</div>}><CustomerQuote project={p} plan={plan} job={fabrication} onSave={customerQuote=>update({customerQuote})} onClose={()=>setCustomerQuoteOpen(false)}/></Suspense>}
+      {barWizardOpen&&<BreakfastBarWizard project={p} onClose={()=>setBarWizardOpen(false)} onApply={islandConfig=>{update({island:true,islandConfig:{...p.islandConfig,...islandConfig}},true);setBarWizardOpen(false);setToast('Breakfast bar created. Drag or rotate it in Room plan, then review the 3D design.');}}/>}
       {canUndoCabinet(p,deleteUndo)&&<div className="cabinet-undo" role="status"><span>Removed {deleteUndo.label}</span><button className="primary compact" onClick={undoDeleteCabinet}>Undo</button><button className="text" onClick={()=>setDeleteUndo(null)}>Dismiss</button></div>}
       {gapFix&&(
         <div className="modal-backdrop" onMouseDown={()=>setGapFix(null)}>
