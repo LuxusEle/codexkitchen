@@ -1,6 +1,6 @@
 # Site kitchen BOM review - 29 September 2026
 
-Local branch: dev/site-kitchen-bom. Based on ebecfc6, containing origin/main 357536e plus 11 local commits. Fetch and fast-forward sync completed without overwriting local work. No push or deployment.
+Local branch: dev/site-kitchen-bom. Based on ebecfc6, containing origin/main 357536e plus 11 local commits. Fetch and fast-forward sync completed without overwriting local work. Release 084f529 was pushed to origin/dev/site-kitchen-bom and deployed to codexkitchen.vercel.app.
 
 Preview: http://127.0.0.1:9799/site-review.html. Development-only page; no cloud accounts or production authentication changes. Export project, cut lists, nesting SVGs and BOM: node scripts/export-site.mjs OUTPUT_DIRECTORY.
 
@@ -46,3 +46,7 @@ The supplier catalogue is saved in workspace outputs only, not integrated into t
 ## Local render fix
 
 ReportingPanel now captures previews automatically after the sibling 3D scene mounts. The Renders tab is always available and previews are independent of PDF results, so switching report types no longer erases renders. Captures are shared with visual/full PDF generation to avoid rerendering; project changes invalidate previews. A failed capture is retriable. Isometric span increased to include complete upper cabinets and centre target raised. Browser verified fresh page load, all six 3D JPEGs loaded at 1440 x 960, BOM generation, return to Renders and report switching. Eight reporting/site tests and production build passed (existing bundle-size warning). Local only; no push or deployment.
+
+## Measured starter in the production workspace
+
+The authenticated project dashboard now offers Open measured kitchen. It opens a fresh, business-scoped local draft in Design using the validated site layout; Save project persists it through the existing cloud workflow. The room controls retain placed cabinets for measurement changes and do nothing when the value is unchanged. Opening edits retain placement and expose actual conflicts. Plan, 3D and cabinet controls show the site's A/B/C/D labels. The automatic U solver no longer rejects every room below 3000 mm; actual corner, appliance, opening and gap validation remains in force. A 2900 mm hob/sink regression and measured starter business/cloud/copy/room/BOM round-trip regression cover the original failure.

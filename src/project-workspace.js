@@ -1,4 +1,5 @@
 import {initialProject,parseProject} from './model.js';
+import {siteKitchen} from './site-kitchen.js';
 import {defaultBusiness} from './business.js';
 
 export const draftKey=userId=>`CODEXKITCHENAPP_DRAFTS_V2:${userId}`;
@@ -9,6 +10,13 @@ export function detachedProject(source,name=source.name){
   return {...p,projectId:crypto.randomUUID(),name:name.trim()||'Untitled kitchen'};
 }
 export function newProject(name){return detachedProject({...initialProject(),openings:[]},name);}
+export function newMeasuredKitchen(name='Measured U kitchen'){return detachedProject(siteKitchen(),name);}
+export function updateRoomValue(p,key,value){
+  if(p.room[key]===value)return p;
+  // Retain a placed design while checking the new site envelope. Changing the
+  // arrangement is an explicit request for automatic generation.
+  return {...p,room:{...p.room,[key]:value},...(key==='layout'?{units:null}:{})};
+}
 export function cloudDocument(row){const businessId=row.businessId||'luxus';return {...parseProject(JSON.stringify(row.document)),businessId,businessProfile:row.document.businessProfile||defaultBusiness(businessId),cloud:{id:row.id,ownerId:row.ownerId,revision:row.revision}};}
 export function readDrafts(userId,storage=localStorage){
   const rows=JSON.parse(storage.getItem(draftKey(userId))||'[]');

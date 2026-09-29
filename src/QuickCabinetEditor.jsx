@@ -18,7 +18,7 @@ export default function QuickCabinetEditor({unit,anchor,project,issues,onEdit,on
   const heightMin=unit.type==='filler'?100:upper?200:unit.type==='oven'?1800:tall?1600:600;
   const heightMax=Math.min(project.room.height-unit.z,unit.type==='filler'?project.room.height:upper?1200:tall?3000:900);
   return <section ref={ref} tabIndex={-1} role="dialog" aria-modal="false" aria-labelledby="quick-box-title" className="quick-cabinet" style={style}>
-    <div className="quick-heading"><div><span className="eyebrow">{unit.id} · {unit.wall==='Island'?'ISLAND':`WALL ${unit.wall}`} · {unit.z>=900?'UPPER':'BASE / TALL'}</span><h3 id="quick-box-title">{TYPES[unit.type]?.name}</h3></div><button className="icon" aria-label="Close cabinet editor" onClick={close}><X size={18}/></button></div>
+    <div className="quick-heading"><div><span className="eyebrow">{unit.id} · {unit.wall==='Island'?'ISLAND':`WALL ${project.siteWallLabels?.[unit.wall]||unit.wall}`} · {unit.z>=900?'UPPER':'BASE / TALL'}</span><h3 id="quick-box-title">{TYPES[unit.type]?.name}</h3></div><button className="icon" aria-label="Close cabinet editor" onClick={close}><X size={18}/></button></div>
     <p className="quick-help">Changes update the design and estimate immediately.</p>
     {unit.type==='cooker'&&<label className="field">Cooker hood<select value={hoodType(unit)} onChange={e=>onEdit('hoodType',e.target.value)}><option value="cassette">Cassette (default)</option><option value="column">Column / chimney</option></select><small>Style only; appliance cost and installation clearance require review.</small></label>}
     <div className="two">

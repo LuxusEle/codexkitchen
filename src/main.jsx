@@ -46,7 +46,7 @@ import QuoteSummary from './QuoteSummary.jsx';
 import BreakfastBarWizard from './BreakfastBarWizard.jsx';
 import {removeCabinet,canUndoCabinet} from './cabinet-actions.js';
 import {cloudRequest} from './cloud-client.js';
-import {projectIdentity,projectContent,writeDraft,removeDraft,detachedProject} from './project-workspace.js';
+import {projectIdentity,projectContent,updateRoomValue,writeDraft,removeDraft,detachedProject} from './project-workspace.js';
 import {copyRenderPack,copyRenderImage,prepareClipboardSheet} from './render-clipboard.js';
 import { moveCabinetRun, movableRun, shuffleDesign, designSignature, placementErrors, saveDesignSlot, restoreDesignSlot } from './runPlacement.js';
 import {
@@ -242,7 +242,7 @@ function Plan({ p, plan, selected, onSelect, onMoveUnit, onMoveOpening, onMoveSt
             style={{cursor:dragEnabled?'grab':'default'}}
           >
             <title>
-              {o.kind} on {o.wall}
+              {o.kind} on {p.siteWallLabels?.[o.wall]||o.wall}
             </title>
           </line>
         );
@@ -261,7 +261,7 @@ function Plan({ p, plan, selected, onSelect, onMoveUnit, onMoveOpening, onMoveSt
           fontSize="160"
           fill="#385b5e"
         >
-          {w}
+          {p.siteWallLabels?.[w]||w}
         </text>
       ))}
       <g className="plan-dimensions" pointerEvents="none" fill="#163d43" stroke="#163d43">
@@ -277,12 +277,12 @@ function Plan({ p, plan, selected, onSelect, onMoveUnit, onMoveOpening, onMoveSt
     </svg>
   );
 }
-function App({account,initialDocument,initialDirty,onDashboard,onAdmin}) {
+function App({account,initialDocument,initialDirty,initialStep=0,onDashboard,onAdmin}) {
   const [p, setP] = useState(initialDocument),
     [savedContent,setSavedContent]=useState(initialDirty?'':projectContent(initialDocument)),
     [saving,setSaving]=useState(false),
     [saveError,setSaveError]=useState(''),
-    [step, setStep] = useState(0),
+    [step, setStep] = useState(initialStep),
     [selected, setSelected] = useState(null),
     [quickAnchor,setQuickAnchor]=useState(null),
     [deleteUndo,setDeleteUndo]=useState(null),
@@ -325,8 +325,8 @@ function App({account,initialDocument,initialDirty,onDashboard,onAdmin}) {
   const spaceAudit=useMemo(()=>auditCabinetSpace(p,plan.units),[p,plan]);
   const fabrication = useMemo(() => fabricationPlan(p, plan), [p, plan]);
   const settings = useMemo(
-    () => ({ mode, walls, labels, selected, xray, explode, runId: frameRun, moveEnabled:dragEnabled, previewIds }),
-    [mode, walls, labels, selected, xray, explode, frameRun, dragEnabled, previewIds],
+    () => ({ mode, walls, labels, selected, xray, explode, runId: frameRun, moveEnabled:dragEnabled, previewIds,wallLabels:p.siteWallLabels }),
+    [mode, walls, labels, selected, xray, explode, frameRun, dragEnabled, previewIds,p.siteWallLabels],
   );
   const frameRunIds = useMemo(() => [...new Set(fabrication.bars.map(b=>b.runId).filter(Boolean))], [fabrication]);
   const unit = plan.units.find((u) => u.id === selected);
@@ -335,10 +335,10 @@ function App({account,initialDocument,initialDirty,onDashboard,onAdmin}) {
     setP((old) => ({
       ...old,
       ...patch,
-      ...(regenerate ? { units: null } : {}),
+      ...(regenerate && !(old.units && patch.openings) ? { units: null } : {}),
     }));
   const room = (k, v) =>
-    setP((old) => ({ ...old, room: { ...old.room, [k]: v }, units: null }));
+    setP((old) => updateRoomValue(old,k,v));
   const style = (k, v) =>
     setP((old) => ({ ...old, style: { ...old.style, [k]: v } }));
   useEffect(() => {
@@ -708,8 +708,7 @@ function App({account,initialDocument,initialDirty,onDashboard,onAdmin}) {
       <div className="tip">
         <Ruler size={18} />
         <p>
-          Rectangular rooms for UAT 1. Wall A is the rear wall; B, C and D
-          follow clockwise.
+          {p.siteWallLabels?'Site labels: A = sink/window, B = hob, C = fridge, D = plain wall. Room dimensions describe the full rectangular envelope.':'Rectangular rooms for UAT 1. Wall A is the rear wall; B, C and D follow clockwise.'}
         </p>
       </div>
     </>,
@@ -759,7 +758,7 @@ function App({account,initialDocument,initialDirty,onDashboard,onAdmin}) {
                 onChange={(e) => changeOpening(o.id, "wall", e.target.value)}
               >
                 {["A", "B", "C", "D"].map((w) => (
-                  <option key={w}>{w}</option>
+                  <option key={w} value={w}>{p.siteWallLabels?.[w]||w}</option>
                 ))}
               </select>
             </label>
@@ -938,7 +937,7 @@ function App({account,initialDocument,initialDirty,onDashboard,onAdmin}) {
                     <option value="">Best available wall</option>
                     {activeWalls(p.room.layout).map((w) => (
                       <option key={w} value={w}>
-                        Wall {w}
+                        Wall {p.siteWallLabels?.[w]||w}
                       </option>
                     ))}
                   </select>
@@ -1053,7 +1052,7 @@ function App({account,initialDocument,initialDirty,onDashboard,onAdmin}) {
           <option value="">Choose a cabinet…</option>
           {plan.units.map((u) => (
             <option key={u.id} value={u.id}>
-              {u.id} · {TYPES[u.type].name} · {u.wall}
+              {u.id} · {TYPES[u.type].name} · {p.siteWallLabels?.[u.wall]||u.wall}
             </option>
           ))}
         </select>
@@ -1106,7 +1105,7 @@ function App({account,initialDocument,initialDirty,onDashboard,onAdmin}) {
                     "D",
                     ...(unit.wall === "Island" ? ["Island"] : []),
                   ].map((w) => (
-                    <option key={w}>{w}</option>
+                    <option key={w} value={w}>{p.siteWallLabels?.[w]||w}</option>
                   ))}
                 </select>
               </label>
@@ -1514,7 +1513,7 @@ function App({account,initialDocument,initialDirty,onDashboard,onAdmin}) {
                   <option value="top">Top view</option>
                   {["A", "B", "C", "D"].map((w) => (
                     <option key={w} value={w}>
-                      Wall {w}
+                      Wall {p.siteWallLabels?.[w]||w}
                     </option>
                   ))}
                 </select>
@@ -1611,7 +1610,7 @@ function App({account,initialDocument,initialDirty,onDashboard,onAdmin}) {
           {mode === "door" && <ProfileSection />}
           {mode === "run" && (
             <div className="door-development-controls continuous-run-controls">
-              <label>Continuous run <select aria-label="Continuous frame run" value={frameRunIds.includes(frameRun)?frameRun:"all"} onChange={e=>setFrameRun(e.target.value)}><option value="all">All runs</option>{frameRunIds.map(id=><option key={id} value={id}>{id} · Wall {fabrication.bars.find(b=>b.runId===id)?.wall}</option>)}</select></label>
+              <label>Continuous run <select aria-label="Continuous frame run" value={frameRunIds.includes(frameRun)?frameRun:"all"} onChange={e=>setFrameRun(e.target.value)}><option value="all">All runs</option>{frameRunIds.map(id=><option key={id} value={id}>{id} · Wall {p.siteWallLabels?.[fabrication.bars.find(b=>b.runId===id)?.wall]||fabrication.bars.find(b=>b.runId===id)?.wall}</option>)}</select></label>
               <button className="primary" disabled={!frameRunIds.length} onClick={async()=>{try{const {assemblyPdf}=await import('./assembly-pdf.js');const id=frameRunIds.includes(frameRun)?frameRun:'all';const doc=assemblyPdf(fabrication,id);download(new Blob([doc.output('arraybuffer')],{type:'application/pdf'}),`frame-${id}-assembly-REVIEW.pdf`);}catch(e){setToast(e.message)}}}>Download this frame PDF</button>
               <p>Isolated shared front and independent rear support frame. Door-leaf centre lines do not create box-bar uprights.</p>
             </div>
@@ -1816,6 +1815,6 @@ function Workspace({account}){
   const [active,setActive]=useState(null),[adminOpen,setAdminOpen]=useState(false);
   const openProject=value=>{setAdminOpen(false);setActive(value);};
   if(adminOpen&&account.member.admin)return <AdminDashboard account={account} onBack={()=>setAdminOpen(false)} onOpenProject={document=>openProject({document,dirty:false})}/>;
-  return active?<App key={projectIdentity(active.document)} account={account} initialDocument={active.document} initialDirty={active.dirty} onDashboard={()=>setActive(null)} onAdmin={()=>{setActive(null);setAdminOpen(true);}}/>:<Dashboard account={account} onOpen={openProject} onAdmin={()=>setAdminOpen(true)}/>;
+  return active?<App key={projectIdentity(active.document)} account={account} initialDocument={active.document} initialDirty={active.dirty} initialStep={active.initialStep??0} onDashboard={()=>setActive(null)} onAdmin={()=>{setActive(null);setAdminOpen(true);}}/>:<Dashboard account={account} onOpen={openProject} onAdmin={()=>setAdminOpen(true)}/>;
 }
 createRoot(document.getElementById("root")).render(<MeasurementProvider><AuthGate>{account=><Workspace key={`${account.user.id}:${account.member.businessId}`} account={account}/>}</AuthGate></MeasurementProvider>);

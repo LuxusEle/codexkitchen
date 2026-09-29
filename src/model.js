@@ -400,13 +400,6 @@ export function solve(p) {
     reserve.B[0] = returnStart;
   }
   if (p.room.layout==='U') {
-    if (p.room.width < 3000)
-      return {
-        units: [],
-        errors: ["Automatic U layout with two standard blind corners needs 3000 mm across the back wall. A smaller measured kitchen requires a custom cabinet arrangement."],
-        unmet: [],
-        warnings: [],
-      };
     add("corner", "A", 0, 1075, { hand: "left" });
     reserve.A[0] = 1075;
     reserve.D[1] = p.room.depth - 675;
