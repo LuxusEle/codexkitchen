@@ -20,7 +20,7 @@ function BoxDialog({p,initial,onClose,onApply}) {
     <p className="length-help">Feet and inches accept decimals or fractions, e.g. 3 1/2 in. Final schedules and cutting stay in mm.</p>
     <p>Tick the boxes you need. Set their starting sizes and preferred walls, then review the proposed arrangement before OK.</p>
     {p.units&&<p className="box-notice">This rebuilds the arrangement, replacing manual moves and individual box edits. Cancel keeps your current design.</p>}
-    <p className="muted">Unticked requirements are removed; ordinary storage still fills usable wall space. Appliance widths stay fixed. Storage may resize to close gaps—the final sizes are listed below.</p>
+    <p className="muted">Unticked requirements are removed; ordinary storage still fills usable wall space. Enter the measured fridge-space width. Selected appliance widths stay fixed during packing. Storage may resize to close gaps—the final sizes are listed below.</p>
     <button className="secondary compact" onClick={()=>setDraft(old=>['oven','pantry','fridge'].reduce((next,type)=>toggleBriefBox(next,type,false),old))}>No tall units / fridge</button>
     {groups.map(([name,types])=><fieldset className="box-group" key={name}><legend>{name}</legend>
       {types.map(type=>{

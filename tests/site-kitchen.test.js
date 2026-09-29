@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {siteKitchen} from '../src/site-kitchen.js';
 import {solve,parseProject,validateUnits,closeRunGaps,initialProject} from '../src/model.js';
 import {fabricationPlan} from '../src/fabrication.js';
-import {newMeasuredKitchen,updateRoomValue,cloudDocument,detachedProject} from '../src/project-workspace.js';
+import {updateRoomValue,cloudDocument,detachedProject} from '../src/project-workspace.js';
 import {attachBusiness,defaultBusiness} from '../src/business.js';
 test('measured site U kitchen has complete geometry, requirements and nested BOM',()=>{const p=siteKitchen(),r=solve(p),job=fabricationPlan(p,r);assert.deepEqual(r.errors,[]);assert.deepEqual(r.unmet,[]);assert.deepEqual(job.errors,[]);assert.deepEqual(job.rejected,[]);assert.ok(job.bom.length>5);assert.deepEqual(parseProject(JSON.stringify(p)).cabinetRuns,p.cabinetRuns);});
 test('run repair respects the doorway-clear run end',()=>{const p=siteKitchen();const units=closeRunGaps(p,p.units.filter(u=>u.id!=='S06'));assert.ok(units.filter(u=>u.wall==='D'&&u.z<900).every(u=>u.x>=1325));assert.deepEqual(validateUnits(p,units),[]);});
@@ -17,8 +17,8 @@ test('2900 mm automatic U can place the requested hob and sink without a blanket
  const p=initialProject();p.room={width:2900,depth:3190,height:2700,layout:'U'};p.openings=[];p.needs={sink:1,cooker:1,wall:3};p.preferences={cooker:'A',sink:'D'};
  const r=solve(p);assert.deepEqual(r.errors,[]);assert.deepEqual(r.unmet,[]);assert.equal(r.units.find(u=>u.type==='cooker').w,600);assert.equal(r.units.filter(u=>u.type==='corner').length,2);assert.deepEqual(fabricationPlan(p,r).rejected,[]);
 });
-test('measured starter survives business attachment cloud loading and unchanged room controls',()=>{
- const draft=attachBusiness(newMeasuredKitchen(),defaultBusiness('luxus'),{fresh:true}),second=newMeasuredKitchen();assert.notEqual(draft.projectId,second.projectId);
+test('placed design survives business attachment cloud loading and unchanged room controls',()=>{
+ const draft=attachBusiness(detachedProject(siteKitchen()),defaultBusiness('luxus'),{fresh:true}),second=detachedProject(siteKitchen());assert.notEqual(draft.projectId,second.projectId);
  const p=cloudDocument({id:'saved-measured',ownerId:'test-owner',revision:1,document:draft});
  for(const [key,value] of Object.entries(p.room))assert.equal(updateRoomValue(p,key,value),p);
  const taller=updateRoomValue(p,'height',2800);assert.equal(taller.units,p.units);assert.deepEqual(solve(taller).errors,[]);

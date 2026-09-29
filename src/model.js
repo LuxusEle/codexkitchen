@@ -45,7 +45,7 @@ TYPES.wallCorner = {
 // Lift fronts share the same top datum as the rest of the upper row.
 TYPES.lift.z = 1670;
 export const BOX_TYPES = ['sink','cooker','drawers','spice','bottle','waste','dishwasher','base','oven','pantry','fridge','wall','glass','lift'];
-export const FIXED_WIDTH_TYPES = ['sink','cooker','dishwasher','oven','fridge'];
+export const FIXED_WIDTH_TYPES = ['sink','cooker','dishwasher','oven'];
 export function cabinetDefaults(p, type) {
   const t = TYPES[type], custom = p.unitDefaults?.[type] || {};
   if (!t) return null;
@@ -342,6 +342,20 @@ export function closeLegacyBaseUnits(p){
   return {...p,needs,preferences:{...p.preferences,base:p.preferences?.base||p.preferences?.open||''},units:p.units?.map(u=>u.type==='open'&&u.z<900?{...u,type:'base'}:u)||null};
 }
 export function solve(p) {
+  const standard=solveLayout(p);
+  if(p.units||p.room.layout!=='U'||(!standard.errors.length&&!standard.unmet.length))return standard;
+  const compact=solveLayout(p,true);
+  // Keep the usual blind-corner layout when it fits. Compare an alternative
+  // with shallow corner ownership before declaring a small U brief unplaced.
+  const score=plan=>[plan.errors.length,plan.unmet.filter(item=>['Sink unit','Hob + hood','Fridge space','Oven + microwave tower','Dishwasher bay'].some(name=>item.startsWith(name))).length,plan.unmet.length];
+  const a=score(compact),b=score(standard);
+  for(let i=0;i<a.length;i++){
+    if(a[i]<b[i])return compact;
+    if(a[i]>b[i])return standard;
+  }
+  return standard;
+}
+function solveLayout(p,compactU=false) {
   p=closeLegacyBaseUnits(p);
   const errors = [...roomErrors(p),...cabinetBriefErrors(p)];
   if (errors.length) return { units: [], errors, unmet: [], warnings: [] };
@@ -387,22 +401,16 @@ export function solve(p) {
     D: [25, p.room.depth - 25],
   };
   if (["L", "U"].includes(p.room.layout)) {
-    if (p.room.layout==='U'&&(p.room.width < 2200 || p.room.depth < 1900))
-      return {
-        units: [],
-        errors: ["Automatic U layout needs a room at least 2200 × 1900 mm. Enter full room dimensions here, not the length of a cabinet run."],
-        unmet: [],
-        warnings: [],
-      };
-    const compactCorner=p.room.layout==='L'&&(p.room.width<2200||p.room.depth<1900),cornerWidth=compactCorner?600:1075,returnStart=compactCorner?600:675;
+    const compactCorner=compactU||p.room.layout==='L'&&(p.room.width<2200||p.room.depth<1900),cornerWidth=compactCorner?600:1075,returnStart=compactCorner?600:675;
     add("corner", "A", p.room.width - cornerWidth, cornerWidth, { hand: "right",compactCorner });
     reserve.A[1] = p.room.width - cornerWidth;
     reserve.B[0] = returnStart;
   }
   if (p.room.layout==='U') {
-    add("corner", "A", 0, 1075, { hand: "left" });
-    reserve.A[0] = 1075;
-    reserve.D[1] = p.room.depth - 675;
+    const cornerWidth=compactU?600:1075;
+    add("corner", "A", 0, cornerWidth, { hand: "left",compactCorner:compactU });
+    reserve.A[0] = cornerWidth;
+    reserve.D[1] = p.room.depth - (compactU?600:675);
   }
   function spaces(wall, type) {
     let t = cabinetDefaults(p,type),
@@ -440,17 +448,28 @@ export function solve(p) {
         preferred = p.preferences[type],
         choices = preferred ? walls.filter((w) => w === preferred) : [...walls];
       let candidates = [];
+      const available=choices.flatMap(wall=>spaces(wall,type).map(span=>({wall,span})));
       for (const wall of choices) {
         for (const [a, b] of spaces(wall, type)) {
-          const policy=widthAdjustmentPolicy({type,w:t.w}),candidateW=policy&&!['sink','drawers'].includes(type)?Math.min(t.w,b-a):t.w;
+          const policy=widthAdjustmentPolicy({type,w:t.w}),minWidth=Math.max(policy?.min??t.w,t.frontLayout==='doors'&&t.doorDivisions>0?t.doorDivisions*93+1:0);
+          let candidateW=policy&&!['sink','drawers'].includes(type)?Math.min(t.w,b-a):t.w;
+          if(['wall','glass','lift'].includes(type)&&available.reduce((sum,s)=>sum+Math.floor((s.span[1]-s.span[0]+.1)/minWidth),0)>=(p.needs[type]||0)-j){
+            // Reserve space for the remaining requested bays instead of
+            // consuming a short span with one default-width cabinet.
+            const elsewhere=available.filter(s=>s.wall!==wall||Math.abs(s.span[0]-a)>.1||Math.abs(s.span[1]-b)>.1).reduce((sum,s)=>sum+Math.floor((s.span[1]-s.span[0]+.1)/minWidth),0);
+            const remaining=Math.max(0,(p.needs[type]||0)-j-1-elsewhere);
+            candidateW=Math.min(candidateW,b-a-remaining*minWidth);
+          }
           if (b - a + 0.1 < candidateW||candidateW<(policy?.min??t.w)-.1) continue;
           let x = a;
           let score = (b - a - candidateW) / 10000;
           if (["fridge", "oven", "pantry"].includes(type)) {
             const tallUnits=units.filter(u=>u.wall===wall&&["fridge","oven","pantry"].includes(u.type));
-            const outer=tallOuterEnds(p.room.layout,wall),
-              leftAnchor=(outer.includes('left')&&Math.abs(a-reserve[wall][0])<.1)||tallUnits.some(u=>Math.abs(u.x+u.w-a)<.1),
-              rightAnchor=(outer.includes('right')&&Math.abs(b-reserve[wall][1])<.1)||tallUnits.some(u=>Math.abs(u.x-b)<.1);
+            const outer=tallOuterEnds(p.room.layout,wall);
+            let domains=legalRunSpans(p,units,wall,false).map(([lo,hi])=>[Math.max(lo,reserve[wall][0]),Math.min(hi,reserve[wall][1])]).filter(([lo,hi])=>hi>lo);
+            for(const cut of blocked(p,wall,t.z||0,t.h,type))domains=subtract(domains,cut);
+            const leftAnchor=(outer.includes('left')&&domains.some(([lo])=>Math.abs(a-lo)<.1))||tallUnits.some(u=>Math.abs(u.x+u.w-a)<.1),
+              rightAnchor=(outer.includes('right')&&domains.some(([,hi])=>Math.abs(b-hi)<.1))||tallUnits.some(u=>Math.abs(u.x-b)<.1);
             // Tall units form blocks from the beginning/end of the usable run.
             // Do not drop an oven tower into the middle of worktop cabinets.
             for(const xx of [...new Set([...(leftAnchor?[a]:[]),...(rightAnchor?[b-candidateW]:[])])])
@@ -500,7 +519,7 @@ export function solve(p) {
   // can absorb them exists. Revisit only generated END closures once all bays
   // have been created; impossible closures remain explicit.
   if(absorbGeneratedEndClosures(p,units))fillUntilStable(p,units,add,true,[false]);
-  if(['I','GALLEY'].includes(p.room.layout))normalizeStraightBaseRuns(p,units);
+  if(['I','GALLEY'].includes(p.room.layout)||auditRunGaps(p,units).some(g=>g.row==='base'))normalizeAutomaticBaseRuns(p,units);
   placeRequested(["wall", "glass", "lift"]);
   fillUntilStable(p, units, add, true, [true]);
   if (p.island) {
@@ -597,7 +616,7 @@ function addUpperCorners(p, units, add) {
   if(p.upperWalls&&!p.upperWalls.includes('A'))return;
   for (const hand of p.room.layout==='U' ? ["right", "left"] : ["right"]) {
     if(p.upperWalls&&!p.upperWalls.includes(hand==='right'?'B':'D'))continue;
-    const t = cabinetDefaults(p,'wallCorner'),compactCorner=p.room.layout==='L'&&(p.room.width<2200||p.room.depth<1900),cornerWidth=compactCorner?t.d:t.w,
+    const t = cabinetDefaults(p,'wallCorner'),compactCorner=units.some(u=>u.type==='corner'&&u.compactCorner),cornerWidth=compactCorner?t.d:t.w,
       x = hand === "right" ? p.room.width - cornerWidth : 0;
     if (units.some((u) => u.type === "wallCorner" && u.hand === hand)) continue;
     const u = {
@@ -766,7 +785,7 @@ function absorbGeneratedEndClosures(p,units){
   }
   return changed;
 }
-function normalizeStraightBaseRuns(p,units){
+function normalizeAutomaticBaseRuns(p,units){
   const snapshot=units.map(u=>({...u}));
   let changed=false;
   for(const wall of activeWalls(p.room.layout))for(const [a,b] of legalRunSpans(p,units,wall,false)){
@@ -774,10 +793,18 @@ function normalizeStraightBaseRuns(p,units){
     for(let i=units.length-1;i>=0;i--)if(inDomain(units[i])&&units[i].type==='filler'&&units[i].automatic){units.splice(i,1);changed=true;}
     const row=units.filter(u=>inDomain(u)&&u.type!=='filler');
     if(!row.length)continue;
-    const tall=row.filter(u=>['fridge','oven','pantry'].includes(u.type));
+    const tall=row.filter(u=>['corner','fridge','oven','pantry'].includes(u.type));
     const left=tall.filter(u=>u.x-a<=b-(u.x+u.w)).sort((x,y)=>x.x-y.x),right=tall.filter(u=>!left.includes(u)).sort((x,y)=>x.x-y.x);
     const body=row.filter(u=>!tall.includes(u)),storage=body.filter(u=>u.type==='base'),fixed=body.filter(u=>u.type!=='base');
-    const storageWidth=b-a-[...left,...right,...fixed].reduce((sum,u)=>sum+u.w,0);
+    let storageWidth=b-a-[...left,...right,...fixed].reduce((sum,u)=>sum+u.w,0);
+    if(!storage.length&&storageWidth>.1&&storageWidth<300){
+      // A fixed-appliance row can leave less than one storage bay. Put its
+      // explicit closure at a run end, never between the appliances.
+      let suffix=1,id;do{id=`AUTO-END-${wall}-${suffix++}`}while(units.some(u=>u.id===id));
+      const neighbor=left[0]||body[0]||right[0],t=cabinetDefaults(p,'base');
+      const end={id,type:'filler',wall,x:a,w:storageWidth,h:neighbor?.h||t.h,d:neighbor?.d||t.d,z:0,automatic:true,closure:true};
+      units.push(end);row.push(end);left.unshift(end);storageWidth=0;changed=true;
+    }
     // A remaining opening wider than one 1200 mm door bay needs another real
     // storage cabinet, not two separated 75/125 mm holes or a fake filler.
     const requiredStorage=Math.ceil(Math.max(0,storageWidth)/1200);

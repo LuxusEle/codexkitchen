@@ -6,7 +6,7 @@ import ActivityPresence from './ActivityPresence.jsx';
 import {attachBusiness,projectBusiness} from './business.js';
 import {cloudRequest} from './cloud-client.js';
 import {parseProject} from './model.js';
-import {cloudDocument,detachedProject,newProject,newMeasuredKitchen,readDrafts,recoverLegacyDrafts,removeDraft,writeDraft} from './project-workspace.js';
+import {cloudDocument,detachedProject,newProject,readDrafts,recoverLegacyDrafts,removeDraft,writeDraft} from './project-workspace.js';
 import './workspace.css';
 
 function Dialog({title,children,onClose,busy}){
@@ -63,12 +63,6 @@ export default function Dashboard({account,onOpen,onAdmin}){
       <ActivityPresence/>
       <label className="field">Business for new projects, imports and copies<select value={businessId} disabled={!account.member.admin} onChange={e=>setBusinessId(e.target.value)}>{businesses.map(b=><option key={b.id} value={b.id}>{b.name}</option>)}</select></label>
       <div className="dashboard-heading"><div><p className="eyebrow">BUSINESS TRIAL · PROJECTS FIRST</p><h1>Your kitchen projects</h1><p>Start a new project or continue a saved design.</p></div><div className="row"><button className="secondary" disabled={busy} onClick={()=>importer.current.click()}><Upload size={17}/>Import JSON</button><button className="primary" disabled={busy} onClick={()=>{setName('');setError('');setModal({type:'new'});}}><Plus size={18}/>New project</button></div></div>
-      <section className="workspace-empty" aria-label="Measured kitchen starter" style={{textAlign:'left',margin:'18px 0'}}>
-        <h2>Your measured U kitchen</h2>
-        <p>2,900 mm hob wall · 1,865 mm sink run · 762 mm fridge space. Includes continuous frames, the cupboard above the hood and two hob drawers.</p>
-        <button className="primary" disabled={busy||!business} onClick={()=>run(async()=>openDocument(attachBusiness(newMeasuredKitchen(),business,{fresh:true}),true,4))}>Open measured kitchen</button>
-        <p className="workspace-help">Opens an editable draft for review. Choose Save project to keep it in your cloud workspace.</p>
-      </section>
       <input ref={importer} type="file" accept=".json,application/json" hidden onChange={e=>{const f=e.target.files[0];e.target.value='';if(f)run(()=>importFile(f));}}/>
       <nav className="workspace-tabs" aria-label="Workspace sections">{[['projects',account.member.admin?'All projects':'My projects'],['drafts','Local recovery'],['trash','Trash']].map(([id,label])=><button key={id} className={tab===id?'active':''} aria-current={tab===id?'page':undefined} disabled={busy} onClick={()=>setTab(id)}>{label}</button>)}</nav>
       {error&&!modal&&<div role="alert" className="workspace-alert">{error}</div>}{notice&&<p role="status" className="workspace-notice">{notice}</p>}
