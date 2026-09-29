@@ -32,6 +32,7 @@ import {
   ShieldCheck,
 } from "lucide-react";
 import Scene from "./Scene";
+import ReportingPanel from "./ReportingPanel.jsx";
 import AuthGate from './AuthGate.jsx';
 import UserMenu from './UserMenu.jsx';
 import ThemeToggle from './ThemeToggle.jsx';
@@ -1193,6 +1194,7 @@ function App({account,initialDocument,initialDirty,onDashboard,onAdmin}) {
       </p>
     </>,
     <>
+      <ReportingPanel project={p} plan={plan} job={fabrication} sceneRef={scene}/>
       <p className="eyebrow">06 / BRING IT TO LIFE</p>
       <h1>
         From your plan

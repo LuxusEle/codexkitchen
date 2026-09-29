@@ -1,0 +1,11 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {siteKitchen} from '../src/site-kitchen.js';
+import {solve,parseProject} from '../src/model.js';
+import {surfaceTakeoff} from '../src/surface-takeoff.js';
+import {fabricationPlan} from '../src/fabrication.js';
+import {kitchenEstimate} from '../src/costing.js';
+import {contractorReport} from '../src/contractor-report.js';
+test('A and C use 4-inch strips; B full working backsplash; corner stone counted once',()=>{const p=siteKitchen(),plan=solve(p),s=surfaceTakeoff(p,plan.units);assert.equal(s.graniteGrossSqft.toFixed(2),'33.19');assert.equal(s.graniteNetSqft.toFixed(2),'31.46');assert.equal(s.backsplashSqft.toFixed(2),'22.18');assert.ok(s.rows.filter(r=>['A','C'].includes(r.label)).every(r=>r.bands.every(b=>b.height===101.6)));const e=kitchenEstimate(p,plan,fabricationPlan(p,plan));assert.equal(e.sales.find(r=>r.key==='splash').unit,'sq ft');assert.equal(e.sales.find(r=>r.key==='splash').rate,0);assert.equal(e.sales.find(r=>r.key==='granite').quantity,33.19);assert.deepEqual(parseProject(JSON.stringify(p)).surfaces,p.surfaces);});
+test('surface union does not double count overlapping tile bands or opening deductions',()=>{const p=siteKitchen();p.surfaces.backsplash=[{wall:'A',x:0,w:1000,bottom:0,height:1000},{wall:'A',x:500,w:1000,bottom:0,height:1000}];p.openings=[{wall:'A',x:750,w:500,sill:0,h:1000}];assert.equal(surfaceTakeoff(p,[]).rows[0].mm2,1000000);p.openings=siteKitchen().openings;p.surfaces.backsplash[0].height=-1;assert.throws(()=>parseProject(JSON.stringify(p)),/backsplash/);});
+test('complete app report contains every cut and panel ID and frame side views',()=>{const p=siteKitchen(),plan=solve(p),job=fabricationPlan(p,plan),doc=contractorReport(p,plan,job);doc.output();const pdf=doc.internal.pages.flat().join(" ");assert.ok(doc.getNumberOfPages()>25);for(const b of [...job.bars,...job.panels])assert.ok(pdf.includes(b.id),b.id);assert.ok(pdf.includes('side and end views'));assert.ok(pdf.includes('22.18'));});

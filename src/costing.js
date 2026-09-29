@@ -1,3 +1,4 @@
+import {surfaceTakeoff} from "./surface-takeoff.js";
 import { countertopPieces } from "./construction.js";
 import {RATE_DEFAULTS} from './business.js';
 import {materialPricingSettings, supplierBarRate, MATERIAL_FINISHES, MATERIAL_SUPPLIERS, MATERIAL_PRICE_DATE} from './material-prices.js';
@@ -101,13 +102,14 @@ export function kitchenEstimate(p, plan, job) {
       0,
     );
 
+  const surfaces=surfaceTakeoff(p,units);
   const formula=p.businessProfile?.formula||{},baseArea=units.filter(u=>u.z<900&&u.h<1000&&u.type!=='filler').reduce((sum,u)=>sum+u.w*u.h/SQFT,0),upperArea=units.filter(u=>u.z>=900&&u.type!=='filler').reduce((sum,u)=>sum+u.w*u.h/SQFT,0),tallWidth=units.filter(u=>['pantry','oven'].includes(u.type)).reduce((sum,u)=>sum+u.w/FT,0);
   const definitions = [
     ["base", "Bottom cabinets", formula.base==='front_sqft'?baseArea:baseMm/FT, formula.base==='front_sqft'?'sq ft':'lin ft', formula.base==='front_sqft'?'external cabinet front area':'cabinet run'],
     ["upper", "Top cabinets", formula.upper==='front_sqft'?upperArea:upperMm/FT, formula.upper==='front_sqft'?'sq ft':'lin ft', formula.upper==='front_sqft'?'external cabinet front area':'cabinet run'],
     ["tall", formula.tall==='width_ft'?'Tall units by width':'Tall units by height', formula.tall==='width_ft'?tallWidth:tallHeightMm/FT, formula.tall==='width_ft'?'lin ft':'vertical ft', formula.tall==='width_ft'?'sum of oven / pantry widths':'sum of oven / pantry heights'],
-    ["granite", "Granite worktop", graniteSqft, "sq ft", "finished top area"],
-    ["splash", "Wall splashback", wallBaseMm / FT, "lin ft", "wall-side bottom run"],
+    ["granite", "Granite worktop", p.surfaces?.graniteBasis==='gross'?surfaces.graniteGrossSqft:graniteSqft, "sq ft", p.surfaces?.graniteBasis==='gross'?"gross top before sink cutout":"finished top area"],
+    ["splash", "Wall splashback", surfaces.configured?surfaces.backsplashSqft:wallBaseMm / FT, surfaces.configured?"sq ft":"lin ft", surfaces.configured?"configured tile bands less recorded openings":"wall-side bottom run"],
     ["led", "LED under top cabinets", upperMm / FT, "lin ft", "top cabinet run"],
     ["services", "Plumbing + wiring", 1, "job", "fixed allowance"],
   ];

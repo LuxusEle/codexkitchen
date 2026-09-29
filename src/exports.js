@@ -7,7 +7,7 @@ import {
   footprint,
   islandSettings,
   renderingPrompt,
-} from "./model";
+} from "./model.js";
 export function download(blob, name) {
   const url = URL.createObjectURL(blob),
     a = document.createElement("a");
@@ -102,26 +102,26 @@ export function planImage(p, units) {
   }
   ctx.font = `${25 / s}px Arial`;
   ctx.fillStyle = "#163d43";
-  ctx.fillText(`A · ${p.room.width} mm`, p.room.width / 2, -30 / s);
+  ctx.fillText(`${p.siteWallLabels?.A||'A'} · ${p.room.width} mm`, p.room.width / 2, -30 / s);
   ctx.fillText(
-    `C · ${p.room.width} mm`,
+    `${p.siteWallLabels?.C||'C'} · ${p.room.width} mm`,
     p.room.width / 2,
     p.room.depth + 45 / s,
   );
   ctx.save();
   ctx.translate(-35 / s, p.room.depth / 2);
   ctx.rotate(-Math.PI / 2);
-  ctx.fillText(`D · ${p.room.depth} mm`, 0, 0);
+  ctx.fillText(`${p.siteWallLabels?.D||'D'} · ${p.room.depth} mm`, 0, 0);
   ctx.restore();
   ctx.save();
   ctx.translate(p.room.width + 45 / s, p.room.depth / 2);
   ctx.rotate(Math.PI / 2);
-  ctx.fillText(`B · ${p.room.depth} mm`, 0, 0);
+  ctx.fillText(`${p.siteWallLabels?.B||'B'} · ${p.room.depth} mm`, 0, 0);
   ctx.restore();
   return c.toDataURL("image/png");
 }
 export function elevationImage(p, units, wall) {
-  const [c, ctx] = sheet(`WALL ${wall} ELEVATION`),
+  const [c, ctx] = sheet(`WALL ${p.siteWallLabels?.[wall]||wall} ELEVATION`),
     len = wallLength(p.room, wall),
     s = Math.min(1550 / len, 850 / p.room.height),
     ox = (1800 - len * s) / 2,
@@ -132,6 +132,10 @@ export function elevationImage(p, units, wall) {
   ctx.strokeStyle = "#506d72";
   ctx.lineWidth = 2;
   ctx.strokeRect(...rect(0, 0, len, p.room.height));
+  for(const band of p.surfaces?.backsplash||[]){
+    if(band.wall!==wall)continue;
+    ctx.fillStyle='#d5c5a9';ctx.fillRect(...rect(band.x,band.bottom,band.w,band.height));
+  }
   for (const o of p.openings.filter((o) => o.wall === wall)) {
     ctx.fillStyle = o.kind === "window" ? "#b3dce2" : "#ead2b5";
     ctx.fillRect(...rect(o.x, o.sill, o.w, o.h));
@@ -222,7 +226,7 @@ export function preparePack(p, plan, scene) {
       { name: "02-isometric-box-width-reference.png", url: scene.capture("iso") },
       { name: "03-room-plan.png", url: planImage(p, plan.units) },
       ...["A","B","C","D"].map((w) => ({
-        name: `04-elevation-wall-${w}.png`,
+        name: `04-elevation-wall-${p.siteWallLabels?.[w]||w}.png`,
         url: elevationImage(p, plan.units, w),
       })),
       ...(islandElevation?[{name:"05-elevation-island-front.png",url:islandElevation}]:[]),
@@ -231,6 +235,9 @@ export function preparePack(p, plan, scene) {
         url: scene.capture("perspective", "frame"),
       },
       {name:'07-frame-and-carcass.png',url:scene.capture('perspective','carcass')},
+      {name:'08-left-side-model.png',url:scene.capture('D')},
+      {name:'09-right-side-model.png',url:scene.capture('B')},
+      {name:'10-isometric-frame.png',url:scene.capture('iso','frame')},
     ];
   const items = {};
   for (const img of images) items[img.name] = bytes(img.url);
@@ -257,7 +264,7 @@ export function preparePack(p, plan, scene) {
         return [
           u.id,
           TYPES[u.type].name,
-          u.wall,
+          p.siteWallLabels?.[u.wall]||u.wall,
           u.x,
           Math.round(position[0]),
           Math.round(position[1]),

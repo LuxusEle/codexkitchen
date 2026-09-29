@@ -1,0 +1,16 @@
+import fs from 'node:fs';
+import path from 'node:path';
+import {siteKitchen} from '../src/site-kitchen.js';
+import {solve,parseProject} from '../src/model.js';
+import {fabricationPlan,fabricationFiles} from '../src/fabrication.js';
+import {kitchenEstimate} from '../src/costing.js';
+import {zipSync,strToU8} from 'fflate';
+const out=process.argv[2];if(!out)throw Error('Output folder required');fs.mkdirSync(out,{recursive:true});
+const p=siteKitchen(),plan=solve(parseProject(JSON.stringify(p))),job=fabricationPlan(p,plan),estimate=kitchenEstimate(p,plan,job);
+if(job.errors.length||job.rejected.length)throw Error(JSON.stringify({errors:job.errors,rejected:job.rejected}));
+const files=fabricationFiles(job);files['site-kitchen.json']=JSON.stringify(p,null,2);files['cabinet-schedule.csv']='ID,Type,Engine_wall,Site_wall,Offset_mm,Width_mm,Height_mm,Depth_mm\n'+p.units.map(u=>[u.id,u.type,u.wall,p.siteWallLabels[u.wall],u.x,u.w,u.h,u.d].join(',')).join('\n');
+files['site-assumptions.txt']=p.notes;
+fs.writeFileSync(path.join(out,'site-kitchen-bom.zip'),zipSync(Object.fromEntries(Object.entries(files).map(([n,c])=>[n,strToU8(c)]))));
+for(const n of ['site-kitchen.json','bom-review.csv','cabinet-schedule.csv'])fs.writeFileSync(path.join(out,n),files[n]);
+fs.writeFileSync(path.join(out,'takeoff-data.json'),JSON.stringify({project:p,plan,job,estimate},null,2));
+console.log(JSON.stringify({errors:plan.errors,unmet:plan.unmet,bom:job.bom,bars:job.bars.length,panels:job.panels.length,estimate:estimate.purchasingTotal}));

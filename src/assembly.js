@@ -131,7 +131,24 @@ export function notchedOutline(
 // Every record below is consumed by BOTH 3D and the cut/BOM adapter.
 export function carcassParts(p, units) {
   const parts = [];
-  const runs=frameRuns(units);
+  // Opt-in connected upper frames: shared top rails, with a stepped underside
+  // over a shorter hood cabinet. Cabinet fronts retain their actual envelopes.
+  const stepped=[];
+  if(p.fabrication?.continuousUpper){
+    for(const wall of ['A','B','C','D']){
+      const row=units.filter(u=>u.wall===wall&&u.z>=900).sort((a,b)=>a.x-b.x);
+      if(row.length<2)continue;
+      const low=Math.min(...row.map(u=>u.z)),top=row[0].z+row[0].h;
+      if(row.every((u,i)=>Math.abs(u.z+u.h-top)<.1&&u.d===row[0].d&&(!i||Math.abs(row[i-1].x+row[i-1].w-u.x)<.1))&&row.some(u=>u.z>low)){
+        for(const u of row.filter(u=>u.z>low))stepped.push({...u,low,top});
+      }
+    }
+  }
+  const constructionUnits=units.map(u=>{
+    const step=stepped.find(v=>v.wall===u.wall);
+    return step&&u.z>=900?{...u,z:step.low,h:step.top-step.low,...(stepped.some(v=>v.id===u.id)?{frontLayout:'drawers'}:{})}:u;
+  });
+  const runs=frameRuns(constructionUnits);
   for (const [index, run] of runs.entries()) {
     const { start, end, z, h, d } = run,
       pw = PROFILE.width,
@@ -139,6 +156,11 @@ export function carcassParts(p, units) {
     const bottom = z + (z === 0 ? ph : 0),
       H = h - (z === 0 ? ph : 0),
       runId = `R${index + 1}`;
+    const steps=stepped.filter(u=>u.wall===run.wall&&z>=900&&u.x>=start-.1&&u.x+u.w<=end+.1);
+    const splitStep=(a,b)=>{
+      const boundaries=[a,b,...steps.flatMap(u=>[u.x,u.x+u.w]).filter(x=>x>a&&x<b)].sort((a,b)=>a-b);
+      return boundaries.slice(0,-1).map((l,i)=>{const r=boundaries[i+1],step=steps.find(u=>l>=u.x-.1&&r<=u.x+u.w+.1);return [l,r,step?step.z-z:0];});
+    };
     const verticalOverlap=v=>Math.min(z+h,v.z+v.h)-Math.max(z,v.z)>.1;
     const adjacent=side=>units.find(v=>v.wall===run.wall&&!run.units.some(u=>u.id===v.id)&&!['fridge','dishwasher'].includes(v.type)&&verticalOverlap(v)&&Math.abs(side==='left'?v.x+v.w-start:v.x-end)<.1);
     const ownerKey=[...run.units.map(u=>u.id)].sort()[0];
@@ -203,7 +225,8 @@ export function carcassParts(p, units) {
     const rearAdjustment = Number.isInteger(p.fabrication?.rearSupportAdjustment)
       ? Math.max(-10, Math.min(20, p.fabrication.rearSupportAdjustment))
       : 0;
-    const { front: posts, rear } = supportPlan({...run,start:frameStart,end:frameEnd}, spacing, rearAdjustment);
+    const supports = supportPlan({...run,start:frameStart,end:frameEnd}, spacing, rearAdjustment);
+    const posts=supports.front.map(x=>steps.some(u=>Math.abs(u.x-x)<.1)?x-pw:x),rear=supports.rear;
     // Each usable shelf opening gets its own closed perimeter. A sink, drawer,
     // pullout or oven ends the opening; no shelf member is allowed to bridge it.
     const shelfSpans=[];
@@ -225,13 +248,23 @@ export function carcassParts(p, units) {
     for (const y of [bottom, bottom + H - ph])
       for (const zz of [frameBack, frameFront - pw])
         for (let a = frameStart; a < frameEnd; a += 6377)
-          bar("Run rail", Math.min(6377, frameEnd - a), ph, pw, a, y, zz, "x");
+          for(const [l,r,raise] of (y===bottom?splitStep(a,Math.min(a+6377,frameEnd)):[[a,Math.min(a+6377,frameEnd),0]]))
+            bar(raise?'Hood raised sill rail':'Run rail',r-l,ph,pw,l,y+raise,zz,'x');
     for (const x of posts)
       bar("Front upright", pw, H - 2 * ph, ph, x, bottom + ph, frameFront - ph, "y");
     // Turn the concealed rear uprights: 38.1 mm across the run and 25.4 mm
     // in cabinet depth. They finish flush with the rear rails and ACP datum.
-    for (const x of rear)
-      bar("Rear upright", ph, H - 2 * ph, pw, x, bottom + ph, frameBack, "y");
+    for (const x of rear){
+      const step=steps.find(u=>x<u.x+u.w&&x+ph>u.x),raise=step?step.z-z:0;
+      bar("Rear upright",ph,H-2*ph-raise,pw,x,bottom+ph+raise,frameBack,'y');
+    }
+    for(const step of steps){
+      // Return posts frame the raised rear sill; front posts stay outside the hood bay.
+      for(const x of [step.x-ph,step.x+step.w])if(!rear.some(r=>Math.abs(r-x)<.1))
+        bar('Hood rear return',ph,H-2*ph,pw,x,bottom+ph,frameBack,'y');
+      for(const x of [step.x,step.x+step.w-pw])
+        bar('Hood sill cross rail',pw,ph,frameDepth-2*pw,x,step.z,frameBack+pw,'z');
+    }
     for (const x of posts) {
       for (const yy of [bottom, bottom + H - ph])
         bar("Cross rail", pw, ph, frameDepth - 2 * pw, x, yy, frameBack+pw, "z");
@@ -316,10 +349,12 @@ export function carcassParts(p, units) {
     const horizontal = (name, a, b, y, geometry={}) => {
       a=Math.max(a,frameStart);
       b=Math.min(b,frameEnd);
-      for (const [l, r] of spans(a, b)) {
+      const segments=(steps.length&&Math.abs(y-(bottom+ph))<.1?splitStep(a,b):[[a,b,0]]).flatMap(([l,r,raise])=>spans(l,r).map(([a,b])=>[a,b,raise]));
+      for (const [l, r, raise] of segments) {
+        const level=y+raise;
         const panelFront=geometry.panelFront??frameFront-pw,
           panelBack=geometry.panelBack??frameBack+pw+t;
-        const cutPosts=parts.filter(q=>q.runId===runId&&q.name==='Front upright'&&q.x<r&&q.x+q.w>l&&q.y<y+t&&q.y+q.h>y&&q.z<panelFront);
+        const cutPosts=parts.filter(q=>q.runId===runId&&q.name==='Front upright'&&q.x<r&&q.x+q.w>l&&q.y<level+t&&q.y+q.h>level&&q.z<panelFront);
         const frontCuts = cutPosts.map(q => [q.x - l - FIT_CLEARANCE, q.x + q.w - l + FIT_CLEARANCE]),
           backCuts = []; // The shelf butts against the inner rear liner, clear of rear posts.
         const cutDepth=cutPosts.length?Math.max(...cutPosts.map(q=>panelFront-q.z+FIT_CLEARANCE)):0;
@@ -331,7 +366,7 @@ export function carcassParts(p, units) {
             backCuts,
             cutDepth,
           );
-        panel(name, r - l, 3, panelD, l, y, panelBack, {
+        panel(name, r - l, 3, panelD, l, level, panelBack, {
           cutW: r - l,
           cutH: panelD,
           outline,
@@ -367,8 +402,8 @@ export function carcassParts(p, units) {
         );
     // Rear liner is on the ROOM side of the rearmost posts, not behind them.
     // This is a physical 3 mm lining, not a rendering mask.
-    for (const [l, r] of spans(frameStart, frameEnd))
-      panel("Continuous rear cladding", r - l, H-2*ph, t, l, bottom+ph, frameBack+pw);
+    for (const [a,b,raise] of splitStep(frameStart,frameEnd))for(const [l,r] of spans(a,b))
+      panel('Continuous rear cladding',r-l,H-2*ph-raise,t,l,bottom+ph+raise,frameBack+pw);
   }
   for (const u of units) {
     const isCorner = ["corner", "wallCorner"].includes(u.type)&&!u.compactCorner;

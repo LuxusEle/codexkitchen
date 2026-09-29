@@ -166,7 +166,7 @@ function placeIslandGroup(g,item){
   if(rotation===90){g.position.set(x+d,0,y);g.rotation.y=-Math.PI/2;}
   else g.position.set(x,0,y);
 }
-function createRoom(root, p, showWalls) {
+function createRoom(root, p, showWalls, wallLabels = {}) {
   const floor = mat("#e1e5e2");
   box(root, p.room.width, 50, p.room.depth, 0, -50, 0, floor, "Room floor");
   const grid = new T.GridHelper(
@@ -224,7 +224,7 @@ function createRoom(root, p, showWalls) {
         box(g, 20, o.h, 30, o.x + o.w / 2 - 10, o.sill, -30, om);
       }
     }
-    let s = textSprite(`WALL ${wall} · ${Math.round(length)}`, 85);
+    let s = textSprite(`WALL ${wallLabels[wall] || wall} · ${Math.round(length)}`, 85);
     s.position.set(length / 2, 30, -130);
     g.add(s);
   }
@@ -439,7 +439,7 @@ function createBreakfastBar(root,p,units,mats){
 }
 export function buildScene(p, plan, settings) {
   const group = new T.Group();
-  if (!["door", "run"].includes(settings.mode)) createRoom(group, p, settings.walls);
+  if (!["door", "run"].includes(settings.mode)) createRoom(group, p, settings.walls, settings.wallLabels);
   const mats = {
     metal: mat(p.style.frame, 0.7, 0.32),
     front: mat(p.style.front, 0.12, p.style.finish === "glossy" ? 0.18 : 0.65),
@@ -504,6 +504,12 @@ export function buildScene(p, plan, settings) {
       if (mesh) mesh.userData.unitId = piece.unitId;
     }
   if (!["frame", "carcass"].includes(settings.mode))createBreakfastBar(group,p,plan.units,mats);
+  if(!['frame','carcass','run','door'].includes(settings.mode)){
+    for(const band of p.surfaces?.backsplash||[]){
+      const a=wallPoint(p.room,band.wall,band.x,0),b=wallPoint(p.room,band.wall,band.x+band.w,6);
+      box(group,Math.abs(b[0]-a[0]),band.height,Math.abs(b[1]-a[1]),Math.min(a[0],b[0]),band.bottom,Math.min(a[1],b[1]),mat('#cdbf9f',0,.8),'Tiled backsplash');
+    }
+  }
   if (settings.xray) applyXray(group);
   return group;
 }
@@ -771,7 +777,7 @@ const Scene = forwardRef(function Scene(
         r.controls.target.copy(target);
         r.controls.update();
       },
-      capture(name = "perspective", mode = "finished") {
+      capture(name = "perspective", mode = "finished", options = {}) {
         const r = runtime.current;
         if (!r) throw Error("3D renderer is unavailable.");
         const { project: p, plan } = data.current,
@@ -782,15 +788,18 @@ const Scene = forwardRef(function Scene(
         const light = new T.DirectionalLight("#fff6eb", 3);
         light.position.set(-4000, 7000, 5000);
         scene.add(light);
-        const g = buildScene(p, plan, { mode, walls: false, labels: true });
+        const capturePlan=options.wall?{...plan,units:plan.units.filter(u=>u.wall===options.wall)}:plan;
+        const captureProject=options.wall?{...p,openings:p.openings.filter(o=>o.wall===options.wall),surfaces:{...p.surfaces,backsplash:p.surfaces?.backsplash?.filter(b=>b.wall===options.wall)}}:p;
+        const g = buildScene(captureProject, capturePlan, { mode, walls: false, labels: true,wallLabels:p.siteWallLabels });
         scene.add(g);
         let camera;
         if (["perspective", "iso"].includes(name)) {
-          camera = new T.PerspectiveCamera(40, 1.5, 10, 60000);
+          const span=Math.max(w,d)*1.9;
+          camera = name==='iso'?new T.OrthographicCamera(-span/2,span/2,span/3,-span/3,10,60000):new T.PerspectiveCamera(40, 1.5, 10, 60000);
           camera.position.set(...(name === "iso"
-            ? [w * 1.45, h * 1.55, d * 1.45]
+            ? [-w * .6, h * 1.4, d * 1.7]
             : [-w * 0.45, h * 1.65, d * 1.8]));
-          camera.lookAt(w / 2, 800, d / 2);
+          camera.lookAt(w / 2, name==='iso'?1100:800, d / 2);
         } else {
           const span =
             name === "top"
@@ -818,9 +827,10 @@ const Scene = forwardRef(function Scene(
         const size = r.renderer.getSize(new T.Vector2()),
           ratio = r.renderer.getPixelRatio();
         r.renderer.setPixelRatio(1);
-        r.renderer.setSize(1800, 1200, false);
+        const captureWidth=options.width||1800;
+        r.renderer.setSize(captureWidth, captureWidth/1.5, false);
         r.renderer.render(scene, camera);
-        const url = r.renderer.domElement.toDataURL("image/png");
+        const url = r.renderer.domElement.toDataURL(options.format==='jpeg'?"image/jpeg":"image/png",.92);
         r.renderer.setPixelRatio(ratio);
         r.renderer.setSize(size.x, size.y, false);
         dispose(g);

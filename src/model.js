@@ -204,6 +204,13 @@ export function roomErrors(p) {
   ])
     if (!Number.isFinite(p.room[k]) || p.room[k] < min || p.room[k] > max)
       e.push(`Room ${k} must be ${min}–${max} mm.`);
+  if(p.cabinetRuns!==undefined){
+    if(!p.cabinetRuns||typeof p.cabinetRuns!=='object'||Array.isArray(p.cabinetRuns))e.push('Invalid cabinet run limits.');
+    else for(const [row,walls] of Object.entries(p.cabinetRuns)){
+      if(!['base','upper'].includes(row)||!walls||typeof walls!=='object'||Array.isArray(walls)){e.push('Invalid cabinet run row.');continue;}
+      for(const [wall,span] of Object.entries(walls))if(!['A','B','C','D'].includes(wall)||!Array.isArray(span)||span.length!==2||!span.every(Number.isFinite)||span[0]<0||span[1]<=span[0]||span[1]>wallLength(p.room,wall))e.push('Cabinet run limits must fit within their measured wall.');
+    }
+  }
   for (const o of p.openings) {
     if (
       !["A", "B", "C", "D"].includes(o.wall) ||
@@ -288,6 +295,8 @@ export function validateUnits(p, units) {
     if(u.doorDivisions>0&&u.type!=='drawers'&&u.frontLayout!=='drawers'&&u.frontLayout!=='open'&&(accessWidth/u.doorDivisions-3)<=90)errors.push(`Door divisions for ${u.id} leave a leaf too narrow for the 45 mm sash.`);
     if((u.type==='drawers'||u.frontLayout==='drawers')&&(u.h-44-((u.doorDivisions||3)-1)*3)/(u.doorDivisions||3)<=122)errors.push(`Drawer divisions for ${u.id} leave a front too short for the sash and handle.`);
     if(u.type==='oven'&&u.h<1800)errors.push(`Oven tower ${u.id} needs at least 1800 mm height for its appliance and front divisions.`);
+    const run=p.cabinetRuns?.[u.z>=900?'upper':'base']?.[u.wall];
+    if(run&&(u.x<run[0]-.1||u.x+u.w>run[1]+.1))errors.push(u.id+': cabinet exceeds the measured run limit.');
     let f = footprint(p, u);
     if (
       f[0] < -0.1 ||
@@ -381,7 +390,7 @@ export function solve(p) {
     if (p.room.layout==='U'&&(p.room.width < 2200 || p.room.depth < 1900))
       return {
         units: [],
-        errors: ["This corner arrangement needs at least 2200 × 1900 mm."],
+        errors: ["Automatic U layout needs a room at least 2200 × 1900 mm. Enter full room dimensions here, not the length of a cabinet run."],
         unmet: [],
         warnings: [],
       };
@@ -394,7 +403,7 @@ export function solve(p) {
     if (p.room.width < 3000)
       return {
         units: [],
-        errors: ["A U kitchen needs at least 3000 mm room width in UAT 1."],
+        errors: ["Automatic U layout with two standard blind corners needs 3000 mm across the back wall. A smaller measured kitchen requires a custom cabinet arrangement."],
         unmet: [],
         warnings: [],
       };
@@ -406,6 +415,8 @@ export function solve(p) {
     let t = cabinetDefaults(p,type),
       upper = (t.z || 0) > 900,
       sp = upper ? legalRunSpans(p, units, wall, true) : [reserve[wall]];
+    const limit=p.cabinetRuns?.[upper?'upper':'base']?.[wall];
+    if(limit)sp=sp.map(([a,b])=>[Math.max(a,limit[0]),Math.min(b,limit[1])]).filter(([a,b])=>b>a);
     for (const b of blocked(p, wall, t.z || 0, t.h, type)) sp = subtract(sp, b);
     for (const u of units.filter(
       (u) =>
@@ -558,7 +569,7 @@ function upperBlockers(p, units, wall) {
 export function legalRunSpans(p, units, wall, upper) {
   if(upper&&p.upperWalls&&!p.upperWalls.includes(wall))return [];
   const {z,h,d}=rowEnvelope(p,units,wall,upper);
-  let spans = [[0, wallLength(p.room, wall)]];
+  let spans = [p.cabinetRuns?.[upper?'upper':'base']?.[wall] || [0, wallLength(p.room, wall)]];
   for (const b of blocked(p, wall, z, h, upper ? "wall" : "base"))
     spans = subtract(spans, b);
   if (upper)
@@ -1079,6 +1090,11 @@ export function parseProject(text) {
   if (clean.units) {
     const e = validateUnits(clean, clean.units);
     if (e.length) throw Error(e[0]);
+  }
+  if(p.surfaces?.backsplash!==undefined){
+    const bands=p.surfaces.backsplash;
+    if(!Array.isArray(bands)||bands.length>40)throw Error('Use at most 40 backsplash bands.');
+    for(const b of bands)if(!['A','B','C','D'].includes(b.wall)||!['x','w','bottom','height'].every(k=>Number.isFinite(b[k]))||b.x<0||b.w<=0||b.bottom<0||b.height<=0||b.x+b.w>wallLength(clean.room,b.wall)||b.bottom+b.height>clean.room.height)throw Error('Invalid backsplash band dimensions.');
   }
   if(p.designVariants!==undefined){
     if(!Array.isArray(p.designVariants)||p.designVariants.length>4)throw Error('A project can contain at most four saved designs.');
