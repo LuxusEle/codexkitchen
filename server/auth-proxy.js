@@ -1,16 +1,22 @@
 import {eq} from 'drizzle-orm';
 import {getDb} from './db.js';
 import {members} from './schema.js';
-import {HttpError,readJson} from './security.js';
+import {HttpError,readJson,localDevAuth} from './security.js';
 import {browserCookie,checkOrigin,neonRequest,rateLimit,recordLogin,usernameInput} from './auth-service.js';
 
 const routes={'sign-in/email':'POST','sign-out':'POST','get-session':'GET','token':'GET','email-otp/send-verification-otp':'POST','email-otp/verify-email':'POST'};
 export default async function authProxy(req,res){
   res.setHeader('Cache-Control','private, no-store');res.setHeader('Content-Type','application/json');res.setHeader('X-Content-Type-Options','nosniff');
   try{
-    checkOrigin(req);
-    const url=new URL(req.url,'http://localhost'),path=url.searchParams.get('path')||url.pathname.replace(/^\/api\/auth\/?/,'');
+  if(!req.url)throw new HttpError(400,'Invalid request.');
+  checkOrigin(req);
+  const url=new URL(req.url.startsWith('http')?req.url:('http://localhost'+req.url),'http://localhost'),path=url.searchParams.get('path')||url.pathname.replace(/^\/api\/auth\/?/,'');
     if(routes[path]!==req.method)throw new HttpError(404,'Unknown sign-in operation.');
+    if(localDevAuth()&&!process.env.DATABASE_URL){
+      if(path==='token'){res.statusCode=200;res.end(JSON.stringify({token:'local-dev-'+Date.now()}));return;}
+      if(path==='get-session'){res.statusCode=200;res.end(JSON.stringify({user:{id:'local-user',email:'local@example.com',emailVerified:true,name:'Local user'},session:{id:'local-session',expiresAt:new Date(Date.now()+86400000).toISOString()}}));return;}
+      if(path==='sign-out'){res.statusCode=200;res.end(JSON.stringify({success:true}));return;}
+    }
     let body=req.method==='POST'?await readJson(req,16384):undefined;
     const db=getDb();
     if(path==='sign-in/email'){

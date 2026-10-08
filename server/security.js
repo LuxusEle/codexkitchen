@@ -13,10 +13,16 @@ export function createTokenVerifier(baseUrl,keys){
     return {id:payload.sub,email:typeof payload.email==='string'?payload.email:'',emailVerified:payload.emailVerified===true,issuedAt:payload.iat};
   };
 }
+// Zero-configuration local workspace: allowed only when Neon Auth is absent,
+// the process is not on Vercel and this is not a production build.
+export const localDevAuth=()=>!process.env.NEON_AUTH_BASE_URL&&!process.env.VERCEL&&process.env.NODE_ENV!=='production';
 export async function authenticate(req){
   const match=/^Bearer ([^\s]+)$/.exec(req.headers.authorization||'');
   if(!match||match[1].length>16000)throw new HttpError(401,'Sign in to use cloud projects.');
-  if(!process.env.NEON_AUTH_BASE_URL)throw new HttpError(503,'Neon Auth is not configured.');
+  if(!process.env.NEON_AUTH_BASE_URL){
+    if(localDevAuth())return {id:'local-user',email:'local@example.com',emailVerified:true,issuedAt:Date.now()};
+    throw new HttpError(503,'Neon Auth is not configured.');
+  }
   verifier ||= createTokenVerifier(process.env.NEON_AUTH_BASE_URL);
   try{return await verifier(match[1]);}catch{throw new HttpError(401,'Your session expired or is invalid. Sign in again.');}
 }

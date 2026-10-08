@@ -8,7 +8,7 @@ import {handleUpload} from '@vercel/blob/client';
 import {getDb} from './db.js';
 import {projects,assets,members,loginAlerts} from './schema.js';
 import {staffInput,neonAdmin,enforceVerification,mailConfigured,deliverAlert,recordActivity} from './auth-service.js';
-import {authenticate,HttpError,validId,fileInput,readJson,FILE_TYPES} from './security.js';
+import {authenticate,HttpError,validId,fileInput,readJson,FILE_TYPES,localDevAuth} from './security.js';
 import {parseProject} from '../src/model.js';
 import {projectAction} from './project-actions.js';
 
@@ -47,6 +47,7 @@ export default async function cloud(req,res){
   try{
     const url=new URL(req.url,'http://localhost'),op=url.searchParams.get('op'),method=req.method;
     if(op==='config'&&method==='GET')return json(res,200,{databaseConfigured:!!process.env.DATABASE_URL,authConfigured:!!process.env.NEON_AUTH_BASE_URL,storageConfigured:!!process.env.BLOB_READ_WRITE_TOKEN});
+    if(op==='me'&&method==='GET'&&localDevAuth()&&!process.env.DATABASE_URL){const user=await authenticate(req);return json(res,200,{user:{id:user.id,email:user.email,emailVerified:user.emailVerified},member:{id:user.id,email:user.email,username:'local-user',name:'Local user',status:'active',requireEmailVerification:false,createdAt:new Date().toISOString(),updatedAt:new Date().toISOString(),admin:false}});}
     if(!process.env.DATABASE_URL)throw new HttpError(503,'Cloud database is not configured. Local saving remains available.');
     const db=getDb();
     if(op==='blob-upload'&&method==='POST'){
