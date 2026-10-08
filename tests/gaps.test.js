@@ -15,6 +15,41 @@ import {
   frontDivision,
   countertopPieces,
 } from "../src/construction.js";
+import { carcassParts } from "../src/assembly.js";
+
+test("Trim-level height difference stays on one continuous run frame (870 cooker in an 850 run)", () => {
+  const mk = (id, type, x, w, h = 850) => ({id, type, wall: "A", x, w, h, d: 600, z: 0});
+  const units = [
+    mk("c1", "corner", 0, 600),
+    mk("b1", "base", 600, 550),
+    mk("k1", "cooker", 1150, 600, 870),
+    mk("b2", "base", 1750, 550),
+    mk("c2", "corner", 2300, 600),
+  ];
+  const runs = frameRuns(units);
+  assert.equal(runs.length, 1, "one continuous bottom run frame");
+  const run = runs[0];
+  assert.equal(run.end, 2900);
+  assert.equal(run.h, 850, "run keeps its first unit's height");
+  assert.equal(run.units.length, 5, "cooker stays on the shared frame");
+
+  const parts = carcassParts(initialProject(), units);
+  assert.equal(
+    parts.filter((p) => p.name?.startsWith("End sash") && p.x > 600 && p.x < 2300).length,
+    0,
+    "no double end posts at interior seams",
+  );
+  assert.equal(
+    parts.filter((p) => p.name === "Plinth left rail").length,
+    1,
+    "one closed toe frame for the whole run",
+  );
+
+  // Deliberate bigger steps still split into their own frames.
+  const split = frameRuns([mk("a", "base", 0, 600), mk("b", "oven", 600, 600, 2100)]);
+  assert.equal(split.length, 2);
+});
+
 
 for (const layout of ["I", "L", "U", "GALLEY"])
   test(`${layout}: no unexplained base or upper run gaps`, () => {

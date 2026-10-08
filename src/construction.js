@@ -1,5 +1,11 @@
 import { PROFILE, wallPoint } from "./model.js";
 
+// Trim-level height differences (e.g. an 870 mm appliance bay inside an 850 mm
+// base run) must stay on ONE continuous run frame. Without this tolerance a
+// 20 mm difference ejected the unit from its run: it got its own plinth ring
+// and four-sided end sashes on both seams and read as a "detached box".
+// Larger steps are treated as deliberate different-height furniture and split.
+export const RUN_HEIGHT_TOLERANCE = 32;
 // Canonical frame-run grouping used by the renderer and regression checks.
 export function frameRuns(units) {
   const groups = new Map();
@@ -9,7 +15,7 @@ export function frameRuns(units) {
       groups.set(u.id, [u]);
       continue;
     }
-    const key = [u.wall, u.z, u.h, u.d].join("/");
+    const key = [u.wall, u.z, u.d].join("/");
     if (!groups.has(key)) groups.set(key, []);
     groups.get(key).push(u);
   }
@@ -18,7 +24,11 @@ export function frameRuns(units) {
     list.sort((a, b) => a.x - b.x);
     let run;
     for (const u of list) {
-      if (run && Math.abs(run.end - u.x) < 0.1) {
+      if (
+        run &&
+        Math.abs(run.end - u.x) < 0.1 &&
+        Math.abs(u.h - run.h) <= RUN_HEIGHT_TOLERANCE
+      ) {
         run.end = u.x + u.w;
         run.units.push(u);
       } else {
