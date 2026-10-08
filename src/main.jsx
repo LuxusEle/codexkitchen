@@ -75,6 +75,8 @@ import {
 import { download, copyText, preparePack, reminderICS } from "./exports";
 import "./style.css";
 import './theme.css';
+import './studio.css';
+import StudioBrand from './StudioBrand.jsx';
 const CloudPanel=lazy(()=>import('./CloudPanel.jsx'));
 const STEPS = [
   ["Room", Ruler],
@@ -1328,17 +1330,8 @@ function App({account,initialDocument,initialDirty,onDashboard}) {
   );
   return (
     <div className="app">
-      <header>
-        <div className="brand">
-          <span className="brand-icon">
-            <Box size={24} />
-          </span>
-          <span>
-            CODEX<span className="brand-light">KITCHEN</span>
-            <small>ALUMINUM DESIGN STUDIO</small>
-          </span>
-          <b className="uat">UAT 1</b>
-        </div>
+      <header className="editor-topbar">
+        <StudioBrand subtitle="ALUMINUM DESIGN STUDIO"/>
         <div className="header-actions">
           <button className="secondary compact" disabled={saving} onClick={backToDashboard}><ArrowLeft size={16}/>Projects</button>
           <ThemeToggle/>
@@ -1389,7 +1382,7 @@ function App({account,initialDocument,initialDirty,onDashboard}) {
           </button>
         ))}
       </nav>
-      <main>
+      <main className="studio-editor-layout">
         <aside className="editor">
           <div className="step-content" key={step}>
             {stepContent[step]}
@@ -1411,7 +1404,7 @@ function App({account,initialDocument,initialDirty,onDashboard}) {
             )}
           </div>
         </aside>
-        <section className="workspace">
+        <section className="workspace studio-canvas">
           <div className="workspace-top">
             <div>
               <p className="eyebrow">LIVE WORKSPACE</p>
@@ -1449,6 +1442,7 @@ function App({account,initialDocument,initialDirty,onDashboard}) {
                   <button
                     key={key}
                     className={mode === key ? "active" : ""}
+                    aria-pressed={mode === key}
                     onClick={() => { setMode(key); if(key==="run"&&frameRun==="all"&&frameRunIds[0])setFrameRun(frameRunIds[0]); }}
                   >
                     {label}
