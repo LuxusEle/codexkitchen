@@ -546,3 +546,24 @@ test("Bar cut plans colour pieces by cabinet, draw mitred ends and print a legen
     assert.ok(barSVG(stock).includes("<polygon"), "mitred piece drawn as an angled polygon");
   }
 });
+
+test("Hinge stiles carry source insert positions; notches and mitres reach the workshop lists", () => {
+  const p = initialProject(), plan = solve(p), job = fabricationPlan(p, plan);
+  const stile = job.bars.find((b) => b.hingeInserts?.length);
+  assert.ok(stile, "a hinge stile bar carries insert positions");
+  assert.ok(/(LFT|RHT)$/.test(stile.id), "inserts sit on a stile, not a rail");
+  const [a, b] = stile.hingeInserts, L = stile.length;
+  assert.ok(Math.abs(a - (L - b)) < 0.6, "inserts sit symmetrically, from each end");
+  assert.ok(a <= 100.01 && a > 0, "first insert no more than 100 mm from the end");
+  const twin = job.bars.find((x) => x.id === stile.id.replace(/LFT|RHT/, (m) => (m === "LFT" ? "RHT" : "LFT")));
+  assert.ok(!twin.hingeInserts, "the opening stile has no hinge inserts");
+  assert.equal(stile.miterStart, 45);
+  assert.equal(stile.miterEnd, 45);
+  const files = fabricationFiles(job);
+  assert.ok(files["bar-cuts.csv"].includes("from each end"), "bar CSV records the hinge insert");
+  assert.ok(files["panel-cuts.csv"].includes("Notches"), "panel CSV carries a notch column");
+  assert.ok(/13\.7 mm deep/.test(files["panel-cuts.csv"]), "notch depth follows the master convention (38.1-25.4+1)");
+  const stock = job.barNest.stocks.find((s) => s.cuts.some((c) => c.hingeInserts?.length));
+  assert.ok(stock, "the hinge stile is nested on a stock bar");
+  assert.ok(barSVG(stock).includes('class="hinge"'), "bar plan marks the hinge insert");
+});

@@ -93,7 +93,7 @@ export function FabricationControls({ p, job, onChange }) {
         Download cutting review ZIP
       </button>
       <p className="muted">
-        Includes nested SVGs, per-sheet CNC DXFs in the master convention (AC1015, mm, STOCK / CUT_OUTER / PART_ID layers, one label per part), individual cut IDs, panel contours, stock BOM, hardware list, JSON and source provenance.
+        Includes nested SVGs, per-sheet CNC DXFs in the master convention (AC1015, mm, STOCK / CUT_OUTER / PART_ID layers, one label per part), individual cut IDs, panel contours and notch lists, 45° sash-bar mitres with hinge-insert positions on stiles, stock BOM, hardware list, JSON and source provenance.
       </p>
       <label className="field">Frame assembly<select value={runIds.includes(runId)?runId:'all'} onChange={e=>setRunId(e.target.value)}><option value="all">All continuous frames</option>{runIds.map(id=><option key={id} value={id}>{id} · Wall {job.bars.find(b=>b.runId===id).wall}</option>)}</select></label>
       <button className="primary" disabled={pdfBusy||!runIds.length} onClick={exportAssembly}>{pdfBusy?'Preparing PDF…':'Download frame assembly PDF'}</button>
