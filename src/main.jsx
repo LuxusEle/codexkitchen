@@ -671,6 +671,10 @@ function App({account,initialDocument,initialDirty,onDashboard}) {
     return list;
   }, [roomProblems, plan, spaceAudit, fabrication]);
   const blockingIssues = issues.filter((i) => i.level === "block").length;
+  const packBlockers = [...new Set([
+    ...issues.filter((i) => i.level === "block").map((i) => i.text),
+    ...plan.unmet.map((x) => `No space for ${x} — free wall space, reduce the quantity or remove it from Your kitchen.`),
+  ])];
   const total = Object.values(p.needs).reduce((a, b) => a + b, 0);
   const stepContent = [
     <>
@@ -1250,7 +1254,7 @@ function App({account,initialDocument,initialDirty,onDashboard}) {
       <section className="workshop-pack" id="workshop-pack">
         <div className="row between">
           <h3>Workshop pack</h3>
-          <span className="small muted">{blockingIssues ? `${blockingIssues} blocking issue${blockingIssues === 1 ? "" : "s"}` : "All checks passed"}</span>
+          <span className="small muted">{packBlockers.length ? `${packBlockers.length} point${packBlockers.length === 1 ? "" : "s"} block output` : "All checks passed"}</span>
         </div>
         <div className="row wrap">
           <button className="primary compact" disabled={!!fabrication.errors.length || !!fabrication.rejected.length} onClick={() => { try { downloadCuttingZip(fabrication); setToast("Cutting review ZIP downloaded."); } catch (e) { setToast(e.message); } }}>
@@ -1264,10 +1268,16 @@ function App({account,initialDocument,initialDirty,onDashboard}) {
           </button>
         </div>
         <p className="muted small">
-          {blockingIssues
-            ? `Complete outputs are blocked while ${blockingIssues} blocking issue${blockingIssues === 1 ? "" : "s"} remain — fix them in Design (open the issues chip above).`
+          {packBlockers.length
+            ? "Complete outputs stay disabled until these are fixed:"
             : "All asked-for boxes are placed and parts fit stock. Previews of every step stay available while you keep editing."}
         </p>
+        {packBlockers.length > 0 && (
+          <ul className="issues">{packBlockers.slice(0, 5).map((t, k) => <li key={k}>{t}</li>)}</ul>
+        )}
+        {packBlockers.length > 5 && (
+          <p className="muted small">+{packBlockers.length - 5} more — the issues chip above lists everything with jump links. The cost + BOM PDF stays available for quoting.</p>
+        )}
       </section>
       <h3 className="render-heading">Concept renders — optional presentation step</h3>
       <label className="field">
@@ -1298,8 +1308,8 @@ function App({account,initialDocument,initialDirty,onDashboard}) {
             ? "Refresh rendering pack"
             : "Prepare rendering pack"}
       </button>
-      {!!problems.length && (
-        <p className="error-text">Resolve the layout check before exporting.</p>
+      {(!!problems.length||!!sceneError) && (
+        <p className="error-text">{sceneError ? `Rendering needs the 3D view: ${sceneError}` : `${problems.length} layout issue${problems.length === 1 ? "" : "s"} block the rendering pack — open the issues chip above for jump links, then come back.`}</p>
       )}
       {pack && (
         <>

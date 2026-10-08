@@ -371,10 +371,14 @@ export function solve(p) {
     D: [25, p.room.depth - 25],
   };
   if (["L", "U"].includes(p.room.layout)) {
-    if (p.room.width < 2200 || p.room.depth < 1900)
+    // The blind corner always owns its footprint at the end of wall A. In a
+    // room smaller than the ideal arrangement the rest of the brief is placed
+    // on a best-effort basis: anything that cannot fit is reported as an
+    // unplaced item instead of discarding the whole kitchen.
+    if (p.room.width < 1200)
       return {
         units: [],
-        errors: ["This corner arrangement needs at least 2200 × 1900 mm."],
+        errors: ["This corner arrangement needs at least 1200 mm room width."],
         unmet: [],
         warnings: [],
       };
@@ -657,10 +661,31 @@ function absorbStorageGap(p,units,wall,upper,a,b,automatic=false){
         for(const u of units)if(changed.has(u.id))Object.assign(u,changed.get(u.id));
         return true;
       }
-      if(!movableStorage.has(next.type)&&!(automatic&&['oven','fridge','dishwasher'].includes(next.type)))break;
+      if(!movableStorage.has(next.type)&&!(automatic&&['cooker','oven','fridge','dishwasher'].includes(next.type)))break;
       moving.push(next);
       edge=direction===-1?next.x:next.x+next.w;
     }
+  }
+  return false;
+}
+const resizableSpecialist = new Set(['drawers','spice','bottle','waste']);
+// A sub-cabinet remnant can also be absorbed by growing an adjacent drawer
+// bank or pullout, as long as the new width stays inside the allowed range
+// and no new validation error appears. Appliance towers, filler closures and
+// the corner are never stretched.
+function growMovableToClose(p,units,wall,upper,a,b){
+  const width=b-a;
+  const before=new Set(validateUnits(p,units));
+  for(const u of units){
+    if(u.wall!==wall||isUpper(u)!==upper||!resizableSpecialist.has(u.type))continue;
+    const left=Math.abs(u.x+u.w-a)<.1,right=Math.abs(u.x-b)<.1;
+    if(!left&&!right)continue;
+    if(u.w+width>maximumCabinetWidth(u))continue;
+    const cand={...u,w:u.w+width,...(right?{x:a}:{})};
+    const next=units.map(v=>v.id===u.id?cand:v);
+    if(validateUnits(p,next).some(e=>!before.has(e)))continue;
+    Object.assign(u,cand);
+    return true;
   }
   return false;
 }
@@ -703,6 +728,9 @@ function fillRunGaps(p, units, add, automatic=false, rows=[false,true]) {
           // contiguous specialist/appliance row into an adjustable storage
           // bay. This avoids fake 25/75 mm end panels in otherwise full runs.
           if(absorbStorageGap(p,units,wall,upper,a,b,automatic))continue;
+          // A remnant can also disappear into an adjacent drawer bank or
+          // pullout when that keeps every other rule satisfied.
+          if(growMovableToClose(p,units,wall,upper,a,b))continue;
           // Never hide a mid-run gap behind a fixed panel. If both neighbours
           // are fixed appliances, leave a visible design issue for adjustment.
           if(middle)continue;
