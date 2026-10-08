@@ -1,4 +1,5 @@
 import { countertopPieces } from "./construction.js";
+import { islandSettings } from './model.js';
 
 export const LKR_COST_DEFAULTS = {
   base: 15500,
@@ -8,6 +9,8 @@ export const LKR_COST_DEFAULTS = {
   splash: 1250,
   led: 1260,
   services: 35000,
+  islandCladding: 0,
+  pendants: 0,
 };
 
 const FT = 304.8;
@@ -112,6 +115,8 @@ export function kitchenEstimate(p, plan, job) {
     ["splash", "Wall splashback", wallBaseMm / FT, "lin ft", "wall-side bottom run"],
     ["led", "LED under top cabinets", upperMm / FT, "lin ft", "top cabinet run"],
     ["services", "Plumbing + wiring", 1, "job", "fixed allowance"],
+    ["islandCladding", "Island timber slat panel", (p.island && islandSettings(p).kind === 'breakfast' ? islandSettings(p).width * 850 / SQFT : 0), "sq ft", "breakfast bar reverse face"],
+    ["pendants", "Warm glass pendant lights", p.island ? islandSettings(p).pendants : 0, "lights", "breakfast bar fittings"],
   ];
   const sales = definitions.map(([key, item, calculated, unit, basis]) => {
     const quantity = Number.isFinite(cfg.salesQuantities[key])

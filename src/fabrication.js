@@ -1,6 +1,6 @@
 import { carcassParts, frontSpecs, hingePositions } from "./assembly.js";
 import { SASH_PROFILE, HANDLE_PROFILE, doorBody } from "./sash-profile.js";
-import { minimumCabinetWidth, TYPES } from './model.js';
+import { minimumCabinetWidth, TYPES, islandSettings } from './model.js';
 
 export const STOCK_DEFAULTS = {
   barLength: 6400,
@@ -277,20 +277,31 @@ export function fabricationPlan(p, plan) {
           status: "Select rated mechanism",
         });
       if (f.kind === "drawer")
-        hardware.push({
-          id: `${f.id}-DRAWER`,
-          unitId: u.id,
-          item:
-            u.type === "drawers" || u.frontLayout==='drawers'
-              ? "Drawer box + runner pair"
-              : `${u.type} pullout assembly`,
-          qty: 1,
-          unit: "sets",
-          status: "Purchased assembly; select product",
-        });
-    }
-  }
-  if (plan.unmet.length) errors.push("Kitchen requirements remain unplaced.");
+          hardware.push({
+            id: `${f.id}-DRAWER`,
+            unitId: u.id,
+            item:
+              u.type === "drawers" || u.frontLayout==='drawers'
+                ? "Drawer box + runner pair"
+                : `${u.type} pullout assembly`,
+            qty: 1,
+            unit: "sets",
+            status: "Purchased assembly; select product",
+          });
+      }
+      }
+      const islandCfg = islandSettings(p);
+      if (p.island && islandCfg.kind === 'breakfast' && islandCfg.pendants > 0) {
+      hardware.push({
+        id: 'PENDANTS',
+        unitId: 'BREAKFAST_BAR',
+        item: 'Warm glass pendant light',
+        qty: islandCfg.pendants,
+        unit: 'lights',
+        status: 'Purchased fitting; select product and hanging height',
+      });
+      }
+      if (plan.unmet.length) errors.push("Kitchen requirements remain unplaced.");
   const barNest = configurationErrors.length
     ? { stocks: [], rejected: [] }
     : nestBars(bars, settings);
@@ -329,6 +340,17 @@ export function fabricationPlan(p, plan) {
       quantity: list.reduce((n, p) => n + p.qty, 0),
       unit: list[0].unit,
     });
+  if (p.island) {
+    const ic = islandSettings(p);
+    if (ic.kind === 'breakfast') {
+      bom.push({
+        item: 'Timber slat panel / 2440 x 1220 mm',
+        category: 'Sheet stock',
+        quantity: 1,
+        unit: 'sheets',
+      });
+    }
+  }
   return {
     status: "ENGINEERING_REVIEW_NOT_MACHINE_RELEASE",
     settings,
