@@ -1,9 +1,6 @@
 import React, {useMemo, useState} from "react";
-import { zipSync, strToU8 } from "fflate";
-import { download } from "./exports";
 import {
   stockSettings,
-  fabricationFiles,
   sheetSVG,
   barSVG,
 } from "./fabrication.js";
@@ -12,6 +9,7 @@ import provenance from "../reference/fabrication/manifest.json";
 import { costingSettings, kitchenEstimate } from "./costing.js";
 import LengthInput from './LengthInput.jsx';
 import {quoteReviewIssues} from './quote-review.js';
+import {downloadCuttingZip,downloadAssemblyPdf,downloadCostPdf} from './workshop-pack.js';
 
 const fmt = (n) =>
   Number(n).toLocaleString(undefined, { maximumFractionDigits: 1 });
@@ -22,27 +20,11 @@ export function FabricationControls({ p, job, onChange }) {
   async function exportAssembly(){
     setPdfBusy(true);setPdfError('');
     try{
-      const {assemblyPdf}=await import('./assembly-pdf.js');
-      const doc=assemblyPdf(job,runIds.includes(runId)?runId:'all');
-      download(new Blob([doc.output('arraybuffer')],{type:'application/pdf'}),`frame-${runId}-assembly-REVIEW.pdf`);
+      await downloadAssemblyPdf(job,runIds.includes(runId)?runId:'all');
     }catch(e){setPdfError(e.message)}finally{setPdfBusy(false)}
   }
   function exportJob() {
-    const files = fabricationFiles(job);
-    files["source-provenance.json"] = JSON.stringify(provenance, null, 2);
-    download(
-      new Blob(
-        [
-          zipSync(
-            Object.fromEntries(
-              Object.entries(files).map(([k, v]) => [k, strToU8(v)]),
-            ),
-          ),
-        ],
-        { type: "application/zip" },
-      ),
-      "kitchen-cutting-REVIEW.zip",
-    );
+    downloadCuttingZip(job);
   }
   return (
     <>
@@ -144,6 +126,7 @@ export function CostingControls({ p, plan, job, onChange }) {
   const reviewIssues=quoteReviewIssues(p,plan,job,estimate);
   const cfg = costingSettings(p);
   const [busy, setBusy] = useState(false), [error, setError] = useState("");
+  const [moneyView,setMoneyView]=useState('sales');
   const commit = (patch) => onChange({ ...cfg, ...patch });
   const salesQty = (line, value) =>
     commit({ salesQuantities: { ...cfg.salesQuantities, [line.key]: Number(value) } });
@@ -158,18 +141,20 @@ export function CostingControls({ p, plan, job, onChange }) {
   async function exportCost() {
     setBusy(true); setError("");
     try {
-      const { costPdf } = await import("./cost-pdf.js");
-      const doc = costPdf(p, estimate);
-      download(new Blob([doc.output("arraybuffer")], { type: "application/pdf" }), "kitchen-cost-and-bom-REVIEW.pdf");
+      await downloadCostPdf(p, estimate);
     } catch (e) { setError(e.message); } finally { setBusy(false); }
   }
   return (
     <section className="cost-editor">
       <p className="eyebrow">LKR PRICE CALCULATOR</p>
       <h2>Estimate & purchasing rates</h2>
-      <p className="intro">Quantities are measured from this kitchen. Every quantity and rate below is editable.</p>
+      <p className="intro">Quantities are measured from this kitchen. Every quantity and rate in the visible list is editable. One list at a time — never add the two together.</p>
+      <div className="segmented quote-toggle" role="tablist" aria-label="Which price list to edit">
+        <button type="button" role="tab" aria-selected={moneyView==='sales'} className={moneyView==='sales'?'active':''} onClick={()=>setMoneyView('sales')}>Customer price</button>
+        <button type="button" role="tab" aria-selected={moneyView==='bom'} className={moneyView==='bom'?'active':''} onClick={()=>setMoneyView('bom')}>Shop cost</button>
+      </div>
       {!!reviewIssues.length&&<details className="fab-note"><summary>{reviewIssues.length} checks before committing the quote</summary><ul>{reviewIssues.map((issue,i)=><li key={i}>{issue}</li>)}</ul></details>}
-      <div className="fab-table price-table">
+      {moneyView==='sales'&&<div className="fab-table price-table">
         <table>
           <thead><tr><th>Customer estimate</th><th>Qty</th><th>Unit</th><th>Rate (LKR)</th><th>Total</th></tr></thead>
           <tbody>
@@ -183,9 +168,9 @@ export function CostingControls({ p, plan, job, onChange }) {
           </tbody>
           <tfoot><tr><th colSpan="4">Customer estimate total</th><th>{money(estimate.salesTotal)}</th></tr></tfoot>
         </table>
-      </div>
-      <button className="secondary" onClick={()=>commit({extras:[...cfg.extras,{id:`other-${Date.now()}`,item:"Other",quantity:1,unit:"job",rate:0}]})}>Add other cost</button>
-      <details open>
+      </div>}
+      {moneyView==='sales'&&<button className="secondary" onClick={()=>commit({extras:[...cfg.extras,{id:`other-${Date.now()}`,item:"Other",quantity:1,unit:"job",rate:0}]})}>Add other cost</button>}
+      {moneyView==='bom'&&<details open>
         <summary>Purchasing BOM prices — separate from customer estimate</summary>
         <div className="fab-table price-table"><table>
           <thead><tr><th>Stock / hardware</th><th>Qty</th><th>Unit</th><th>Rate (LKR)</th><th>Total</th></tr></thead>
@@ -198,8 +183,8 @@ export function CostingControls({ p, plan, job, onChange }) {
           </tr>)}</tbody>
           <tfoot><tr><th colSpan="4">BOM reference subtotal</th><th>{money(estimate.purchasingTotal)}</th></tr></tfoot>
         </table></div>
-      </details>
-      <div className="fab-note">{estimate.sourceNote} The two totals are deliberately not added together.</div>
+      </details>}
+      <div className="fab-note">{estimate.sourceNote} {moneyView==='sales'?'Customer price only — the shop cost list stays in its own tab and is never added to it.':'Shop cost is internal. Reference difference to the customer price: '+money(estimate.salesTotal-estimate.purchasingTotal)+' before labour, installation and overhead.'}</div>
       <button className="primary" disabled={busy} onClick={exportCost}>{busy ? "Preparing PDF…" : "Download cost + BOM PDF"}</button>
       {error && <p role="alert">{error}</p>}
     </section>

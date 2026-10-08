@@ -1,4 +1,5 @@
 import {initialProject,parseProject} from './model.js';
+import {applyShopStandardsIfSet} from './standards.js';
 
 export const draftKey=userId=>`CODEXKITCHENAPP_DRAFTS_V2:${userId}`;
 export function projectIdentity(p){return p.cloud?.id||p.projectId;}
@@ -7,7 +8,12 @@ export function detachedProject(source,name=source.name){
   const p=parseProject(JSON.stringify(source));delete p.cloud;delete p._workspace;
   return {...p,projectId:crypto.randomUUID(),name:name.trim()||'Untitled kitchen'};
 }
-export function newProject(name){return detachedProject({...initialProject(),openings:[]},name);}
+export function newProject(name){return detachedProject(applyShopStandardsIfSet({...initialProject(),openings:[]}),name);}
+export function templateProject(name,kind='L'){
+  const rooms={I:{width:3600,depth:2400,layout:'I'},L:{width:4800,depth:3600,layout:'L'},U:{width:5200,depth:2400,layout:'U'},GALLEY:{width:3600,depth:2100,layout:'GALLEY'}};
+  const base={...initialProject(),openings:[]};
+  return detachedProject(applyShopStandardsIfSet({...base,room:{...base.room,...(rooms[kind]||rooms.L)}}),name);
+}
 export function cloudDocument(row){return {...parseProject(JSON.stringify(row.document)),cloud:{id:row.id,ownerId:row.ownerId,revision:row.revision}};}
 export function readDrafts(userId,storage=localStorage){
   const rows=JSON.parse(storage.getItem(draftKey(userId))||'[]');

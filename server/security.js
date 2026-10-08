@@ -15,7 +15,9 @@ export function createTokenVerifier(baseUrl,keys){
 }
 // Zero-configuration local workspace: allowed only when Neon Auth is absent,
 // the process is not on Vercel and this is not a production build.
-export const localDevAuth=()=>!process.env.NEON_AUTH_BASE_URL&&!process.env.VERCEL&&process.env.NODE_ENV!=='production';
+// ALLOW_LOCAL_WORKSPACE=1 is an explicit opt-in for dedicated demo deployments
+// (e.g. a UAT preview with no database). Never set it on the production app.
+export const localDevAuth=()=>process.env.ALLOW_LOCAL_WORKSPACE==='1'||(!process.env.NEON_AUTH_BASE_URL&&!process.env.VERCEL&&process.env.NODE_ENV!=='production');
 export async function authenticate(req){
   const match=/^Bearer ([^\s]+)$/.exec(req.headers.authorization||'');
   if(!match||match[1].length>16000)throw new HttpError(401,'Sign in to use cloud projects.');

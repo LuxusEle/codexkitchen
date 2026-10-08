@@ -26,3 +26,17 @@ test('Local fallback is disabled on Vercel and in production builds',async()=>{
     if(before.nodeEnv===undefined)delete process.env.NODE_ENV;else process.env.NODE_ENV=before.nodeEnv;
   }
 });
+
+test('Explicit ALLOW_LOCAL_WORKSPACE opt-in serves the local session on Vercel',async()=>{
+  const before={vercel:process.env.VERCEL,nodeEnv:process.env.NODE_ENV,flag:process.env.ALLOW_LOCAL_WORKSPACE};
+  try{
+    process.env.VERCEL='1';process.env.NODE_ENV='production';process.env.ALLOW_LOCAL_WORKSPACE='1';
+    assert.equal((await authenticate({headers:{authorization:'Bearer local-dev-9'}})).id,'local-user');
+    const res=response();await cloud({url:'/api/cloud?op=me',method:'GET',headers:{authorization:'Bearer local-dev-9'}},res);
+    assert.equal(res.statusCode,200);assert.equal(res.body.user.id,'local-user');
+  }finally{
+    if(before.vercel===undefined)delete process.env.VERCEL;else process.env.VERCEL=before.vercel;
+    if(before.nodeEnv===undefined)delete process.env.NODE_ENV;else process.env.NODE_ENV=before.nodeEnv;
+    if(before.flag===undefined)delete process.env.ALLOW_LOCAL_WORKSPACE;else process.env.ALLOW_LOCAL_WORKSPACE=before.flag;
+  }
+});

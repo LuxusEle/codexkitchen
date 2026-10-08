@@ -38,6 +38,9 @@ import BoxChooser from './BoxChooser.jsx';
 import LengthInput,{MeasurementProvider,MeasurementSwitch,checkLengthInputs} from './LengthInput.jsx';
 import QuickCabinetEditor from './QuickCabinetEditor.jsx';
 import QuoteSummary from './QuoteSummary.jsx';
+import {standardHeightFor} from './standards.js';
+import {downloadCuttingZip,downloadAssemblyPdf,downloadCostPdf} from './workshop-pack.js';
+import {kitchenEstimate} from './costing.js';
 import {removeCabinet,canUndoCabinet} from './cabinet-actions.js';
 import {cloudRequest} from './cloud-client.js';
 import {projectIdentity,projectContent,writeDraft,removeDraft,detachedProject} from './project-workspace.js';
@@ -82,9 +85,48 @@ const STEPS = [
   ["Site checklist", ClipboardCheck],
   ["Your kitchen", Refrigerator],
   ["Design", SlidersHorizontal],
-  ["Quote & BOM", Layers],
-  ["Export", Sparkles],
+  ["Price & materials", Layers],
+  ["Workshop pack", Sparkles],
 ];
+
+function IssueChip({ issues, blocking, open, setOpen, onGo }) {
+  const label = issues.length ? `${issues.length} issue${issues.length === 1 ? "" : "s"}` : "Ready to build";
+  return (
+    <div className="issue-chip-wrap">
+      <button
+        type="button"
+        className={`secondary compact issue-chip ${blocking ? "has-block" : issues.length ? "has-warn" : "is-ready"}`}
+        aria-expanded={open}
+        onClick={() => setOpen((v) => !v)}
+      >
+        {issues.length ? <AlertTriangle size={15} /> : <CheckCircle2 size={15} />}
+        <span>{label}</span>
+      </button>
+      {open && (
+        <div className="issue-pop" role="dialog" aria-label="Project issues">
+          <div className="row between">
+            <strong>{issues.length ? `${blocking ? blocking + " blocking · " : ""}${issues.length} found` : "No issues found"}</strong>
+            <button type="button" className="text" onClick={() => setOpen(false)}>Close</button>
+          </div>
+          {!issues.length && (
+            <p className="muted">Every asked-for box is placed and all cut parts fit the selected stock. Complete outputs are enabled.</p>
+          )}
+          {!!issues.length && (
+            <ul>
+              {issues.map((issue, i) => (
+                <li key={i} className={issue.level}>
+                  <span>{issue.text}</span>
+                  {issue.unitId ? <button type="button" className="text" onClick={() => onGo(issue)}>Show</button>
+                    : issue.step !== undefined ? <button type="button" className="text" onClick={() => onGo(issue)}>Go</button> : null}
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
 function Num({ label, value, onChange, min = 0, max = 12000, step = 50, disabled=false }) {
   return (
     <div className="field"><span>{label}</span><LengthInput {...{label,value,onChange,min,max,step,disabled}}/></div>
@@ -277,7 +319,7 @@ function App({account,initialDocument,initialDirty,onDashboard}) {
     [labels, setLabels] = useState(false),
     [view, setView] = useState("perspective"),
     [toast, setToast] = useState(""),
-    [saveState, setSaveState] = useState("Saved on this device"),
+    [saveState, setSaveState] = useState("Saved on this computer"),
     [pack, setPack] = useState(null),
     [busy, setBusy] = useState(false),
     [sceneError, setSceneError] = useState(""),
@@ -290,7 +332,8 @@ function App({account,initialDocument,initialDirty,onDashboard}) {
     [reviewEditing, setReviewEditing] = useState(false),
     [editableBoxes, setEditableBoxes] = useState([]),
     [planRow, setPlanRow] = useState('all'),
-    [cloudOpen,setCloudOpen] = useState(false);
+    [cloudOpen,setCloudOpen] = useState(false),
+    [issuesOpen,setIssuesOpen] = useState(false);
   const dirty=projectContent(p)!==savedContent;
   const currentProject=useRef(p);currentProject.current=p;
   const scene = useRef(),
@@ -325,7 +368,7 @@ function App({account,initialDocument,initialDirty,onDashboard}) {
   useEffect(() => {
     try {
       writeDraft(account.user.id,p,dirty);
-      setSaveState(dirty?"Unsynced changes · local recovery saved":"Saved to cloud");
+      setSaveState(dirty?"Saved on this computer":"Saved to cloud");
     } catch {
       setSaveState("Storage full — save a project file");
     }
@@ -613,6 +656,21 @@ function App({account,initialDocument,initialDirty,onDashboard}) {
     ...plan.errors,
     ...plan.unmet.map((x) => "Needs placement: " + x),
   ];
+  const issues = useMemo(() => {
+    const seen = new Set(), list = [];
+    const push = (item) => { if (!item.text || seen.has(item.text)) return; seen.add(item.text); list.push(item); };
+    for (const t of roomProblems) push({ level: "block", text: t, step: 1 });
+    for (const t of plan.errors) {
+      const m = /\b([A-Za-z]{1,3}\d{2,3})\b/.exec(t);
+      const id = m ? m[1].toUpperCase() : null;
+      push({ level: "block", text: t, step: 4, unitId: id && plan.units.some((u) => String(u.id).toUpperCase() === id) ? id : null });
+    }
+    for (const t of plan.unmet) push({ level: "warn", text: "Needs placement: " + t, step: 3 });
+    for (const g of spaceAudit.gaps || []) push({ level: "warn", text: g.message + (g.w < 300 ? " Below normal cabinet width." : ""), step: 4 });
+    for (const r of fabrication.rejected || []) push({ level: "block", text: "Cutting: " + (r.name || r.part || r.id || "a part") + " does not fit the selected stock.", step: 5 });
+    return list;
+  }, [roomProblems, plan, spaceAudit, fabrication]);
+  const blockingIssues = issues.filter((i) => i.level === "block").length;
   const total = Object.values(p.needs).reduce((a, b) => a + b, 0);
   const stepContent = [
     <>
@@ -1055,6 +1113,16 @@ function App({account,initialDocument,initialDirty,onDashboard}) {
                 max={3000}
                 onChange={(v) => editUnit("h", v)}
               />
+              {(() => {
+                const std = standardHeightFor(unit.type);
+                if (std == null || Math.abs(std - unit.h) < 0.5) return null;
+                return (
+                  <div className="standard-hint">
+                    <span>Shop standard {std} mm</span>
+                    <button type="button" className="text" onClick={() => editUnit("h", std)}>Reset to standard</button>
+                  </div>
+                );
+              })()}
               <Num
                 label="Cabinet depth"
                 value={unit.d}
@@ -1153,7 +1221,7 @@ function App({account,initialDocument,initialDirty,onDashboard}) {
           onClick={runGapAudit}
         >
           <Layers size={16} />
-          Audit & fill gaps
+          Check & fill gaps
         </button>
         <button
           className="secondary full"
@@ -1173,16 +1241,35 @@ function App({account,initialDocument,initialDirty,onDashboard}) {
       </p>
     </>,
     <>
-      <p className="eyebrow">06 / BRING IT TO LIFE</p>
-      <h1>
-        From your plan
-        <br />
-        to a real-looking room.
-      </h1>
+      <p className="eyebrow">07 / WORKSHOP PACK</p>
+      <h1>Your workshop pack, ready to cut.</h1>
       <p className="intro">
-        Prepare reference images and a detailed prompt for ChatGPT image
-        creation.
+        Download the complete outputs below — then, optionally, prepare
+        concept renders to present the idea with ChatGPT image creation.
       </p>
+      <section className="workshop-pack" id="workshop-pack">
+        <div className="row between">
+          <h3>Workshop pack</h3>
+          <span className="small muted">{blockingIssues ? `${blockingIssues} blocking issue${blockingIssues === 1 ? "" : "s"}` : "All checks passed"}</span>
+        </div>
+        <div className="row wrap">
+          <button className="primary compact" disabled={!!fabrication.errors.length || !!fabrication.rejected.length} onClick={() => { try { downloadCuttingZip(fabrication); setToast("Cutting review ZIP downloaded."); } catch (e) { setToast(e.message); } }}>
+            <Download size={15} />Cutting ZIP
+          </button>
+          <button className="secondary compact" disabled={!frameRunIds.length} onClick={() => downloadAssemblyPdf(fabrication, "all").then(() => setToast("Frame assembly sheets downloaded."), (e) => setToast(e.message))}>
+            <Download size={15} />Frame assembly PDF
+          </button>
+          <button className="secondary compact" onClick={() => downloadCostPdf(p, kitchenEstimate(p, plan, fabrication)).then(() => setToast("Cost + BOM PDF downloaded."), (e) => setToast(e.message))}>
+            <Download size={15} />Cost + BOM PDF
+          </button>
+        </div>
+        <p className="muted small">
+          {blockingIssues
+            ? `Complete outputs are blocked while ${blockingIssues} blocking issue${blockingIssues === 1 ? "" : "s"} remain — fix them in Design (open the issues chip above).`
+            : "All asked-for boxes are placed and parts fit stock. Previews of every step stay available while you keep editing."}
+        </p>
+      </section>
+      <h3 className="render-heading">Concept renders — optional presentation step</h3>
       <label className="field">
         Lighting direction
         <textarea
@@ -1316,9 +1403,12 @@ function App({account,initialDocument,initialDirty,onDashboard}) {
     5,
     0,
     <>
-      <p className="eyebrow">06 / QUOTE REVIEW</p><h1>Design to estimate.</h1>
+      <p className="eyebrow">06 / PRICE & MATERIALS</p><h1>Design to estimate.</h1>
       <p className="intro">Review the customer estimate and purchasing rates on the right. Confirm site measurements, supplier prices and your business costs before committing a quote.</p>
       <button className="primary" onClick={openQuote}>Edit quote & BOM prices</button>
+      {blockingIssues > 0 && (
+        <p className="fab-note">{blockingIssues} blocking issue{blockingIssues === 1 ? "" : "s"} — complete outputs (cutting ZIP, cost PDF, assembly sheets) stay disabled until fixed. See the issues chip in the workspace header for a jump list.</p>
+      )}
       <details className="advanced-manufacturing"><summary>Advanced: cutting & frame preview</summary><FabricationControls
         p={p}
         job={fabrication}
@@ -1417,7 +1507,9 @@ function App({account,initialDocument,initialDirty,onDashboard}) {
               <p className="eyebrow">LIVE WORKSPACE</p>
               <h2>{p.name || "Untitled kitchen"}</h2>
             </div>
-            <div className="workspace-options"><MeasurementSwitch/><div className="model-badge">
+            <div className="workspace-options">
+              <IssueChip issues={issues} blocking={blockingIssues} open={issuesOpen} setOpen={setIssuesOpen} onGo={(issue) => { setIssuesOpen(false); if (issue.unitId) setSelected(issue.unitId); if (issue.step !== undefined) setStep(issue.step); }} />
+              <MeasurementSwitch/><div className="model-badge">
               <Layers size={15} />
               {p.style.mode} aluminum
             </div></div>
@@ -1438,11 +1530,23 @@ function App({account,initialDocument,initialDirty,onDashboard}) {
           <div className="viewport">
             <div className="viewport-toolbar">
               <div className="segmented">
+                <span className="segmented-cap">Customer</span>
                 {[
                   ["finished", "Finished"],
+                  ["open", "Open fronts"],
+                ].map(([key, label]) => (
+                  <button
+                    key={key}
+                    className={mode === key ? "active" : ""}
+                    onClick={() => setMode(key)}
+                  >
+                    {label}
+                  </button>
+                ))}
+                <span className="segmented-cap">Build</span>
+                {[
                   ["frame", "Frame only"],
                   ["carcass", "Frame + carcass"],
-                  ["open", "Open fronts"],
                   ["door", "Door development"],
                   ["run", "Continuous frames"],
                 ].map(([key, label]) => (
@@ -1462,7 +1566,7 @@ function App({account,initialDocument,initialDirty,onDashboard}) {
                   onClick={toggleMove}
                   title="Move cabinets in 3D or plan"
                 >
-                  <MousePointer2 size={14}/>{dragEnabled?"Finish move":"Move 3D"}
+                  <MousePointer2 size={14}/>{dragEnabled?"Finish move":"Move cabinets"}
                 </button>
                 {dragEnabled&&selected&&<>
                   <button className="secondary compact" title="Move selected box one position towards the start of its wall" aria-label="Move selected box towards wall start" onClick={()=>stepMove(-1)}><ArrowLeft size={14}/></button>
@@ -1664,7 +1768,7 @@ function App({account,initialDocument,initialDirty,onDashboard}) {
                 <p className="muted">Usable wall lengths exclude openings and perpendicular corner footprints. End closures count as covered, not storage.</p>
                 <table><thead><tr><th>Wall / row</th><th>Usable</th><th>Unboxed</th></tr></thead><tbody>{spaceAudit.rows.map(r=><tr key={`${r.wall}-${r.row}`}><td>{r.wall} / {r.row}</td><td>{Math.round(r.usable)} mm</td><td>{Math.round(r.unboxed)} mm</td></tr>)}</tbody></table>
                 {spaceAudit.gaps.map((g,i)=><p className="warning" key={i}>{g.message} {g.w<300?'Below normal cabinet width: needs neighbouring adjustable storage.':'Available for a correctly sized cabinet.'}</p>)}
-                <button className="text" onClick={runGapAudit}>Run audit & fill</button>
+                <button className="text" onClick={runGapAudit}>Check & fill gaps</button>
               </details>
               {problems.length ? (
                 <ul className="issues">
