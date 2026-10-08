@@ -23,6 +23,8 @@ import {
   nestSheets,
   placedOutline,
   fabricationFiles,
+  sheetDXF,
+  barSVG,
 } from "../src/fabrication.js";
 
 function inside(point, poly) {
@@ -507,4 +509,40 @@ test("Toe-base frame is floor-row only and is never added below top cabinets", (
   assert.equal(upperParts.some(part=>part.assemblyType==="plinth-frame"),false);
   assert.equal(upperParts.some(part=>part.name.startsWith("Plinth")),false);
   assert.equal(carcassParts(p,[lower]).some(part=>part.assemblyType==="plinth-frame"),true);
+});
+
+const CRLF = String.fromCharCode(13, 10);
+test("Every nested sheet ships a labelled CNC DXF (R12, layers, closed contours, part labels)", () => {
+  const p = initialProject(), plan = solve(p), job = fabricationPlan(p, plan);
+  assert.ok(job.sheetNest.sheets.length > 0);
+  const files = fabricationFiles(job);
+  for (const sheet of job.sheetNest.sheets)
+    assert.ok(files[sheet.id + "-cnc.dxf"], sheet.id + " CNC DXF missing from ZIP");
+  const sheet = job.sheetNest.sheets[0];
+  const dxf = sheetDXF(sheet);
+  assert.ok(dxf.startsWith("0" + CRLF + "SECTION"));
+  assert.ok(dxf.includes("AC1009"));
+  assert.ok(dxf.trimEnd().endsWith("EOF"));
+  for (const layer of ["CUT", "LABEL", "SHEET", "INFO"])
+    assert.ok(dxf.includes(layer), "layer " + layer);
+  const lineCount = dxf.split("0" + CRLF + "LINE" + CRLF).length - 1;
+  const expected = 4 + sheet.placements.reduce((n, pl) => n + (pl.outline ? pl.outline.length : 4), 0);
+  assert.equal(lineCount, expected, "one LINE per contour segment plus blank edge");
+  const textCount = dxf.split("0" + CRLF + "TEXT" + CRLF).length - 1;
+  assert.ok(textCount >= sheet.placements.length + 1, "a label per part plus the title block");
+  for (const pl of sheet.placements) assert.ok(dxf.includes("1" + CRLF + pl.id + CRLF), "label for " + pl.id);
+});
+test("Bar cut plans colour pieces by cabinet, draw mitred ends and print a legend", () => {
+  const p = initialProject(), plan = solve(p), job = fabricationPlan(p, plan);
+  assert.ok(job.barNest.stocks.length > 0);
+  const svg = barSVG(job.barNest.stocks[0]);
+  assert.ok(svg.includes("colour = cabinet"));
+  const fills = new Set(svg.split('fill="#').slice(1).map((s) => s.slice(0, 6)));
+  assert.ok(fills.size >= 2, "pieces and legend carry distinct colours");
+  const mitred = job.bars.find((b) => b.miterStart || b.miterEnd);
+  if (mitred) {
+    const stock = job.barNest.stocks.find((s) => s.cuts.some((c) => c.id === mitred.id));
+    assert.ok(stock, "mitred piece is nested on a stock bar");
+    assert.ok(barSVG(stock).includes("<polygon"), "mitred piece drawn as an angled polygon");
+  }
 });

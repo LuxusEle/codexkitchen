@@ -2,7 +2,7 @@
 // Workshop pack step: cutting ZIP, frame assembly PDF, cost + BOM PDF.
 import { zipSync, strToU8 } from 'fflate';
 import { download } from './exports.js';
-import { fabricationFiles } from './fabrication.js';
+import { fabricationFiles, sheetDXF } from './fabrication.js';
 import provenance from '../reference/fabrication/manifest.json';
 
 export function downloadCuttingZip(job,name='kitchen-cutting-REVIEW.zip'){
@@ -12,6 +12,9 @@ export function downloadCuttingZip(job,name='kitchen-cutting-REVIEW.zip'){
     new Blob([zipSync(Object.fromEntries(Object.entries(files).map(([k,v])=>[k,strToU8(v)])))],{type:'application/zip'}),
     name,
   );
+}
+export function downloadSheetDXF(sheet,name=`${sheet.id}-ACPCNC.dxf`){
+  download(new Blob([sheetDXF(sheet)],{type:'application/dxf'}),name);
 }
 export async function downloadAssemblyPdf(job,runId='all'){
   const {assemblyPdf}=await import('./assembly-pdf.js');

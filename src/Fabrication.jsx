@@ -9,7 +9,7 @@ import provenance from "../reference/fabrication/manifest.json";
 import { costingSettings, kitchenEstimate } from "./costing.js";
 import LengthInput from './LengthInput.jsx';
 import {quoteReviewIssues} from './quote-review.js';
-import {downloadCuttingZip,downloadAssemblyPdf,downloadCostPdf} from './workshop-pack.js';
+import {downloadCuttingZip,downloadAssemblyPdf,downloadCostPdf,downloadSheetDXF} from './workshop-pack.js';
 
 const fmt = (n) =>
   Number(n).toLocaleString(undefined, { maximumFractionDigits: 1 });
@@ -93,8 +93,7 @@ export function FabricationControls({ p, job, onChange }) {
         Download cutting review ZIP
       </button>
       <p className="muted">
-        Includes nested SVGs, individual cut IDs, panel contours, stock BOM,
-        hardware list, JSON and source provenance.
+        Includes nested SVGs, per-sheet CNC DXFs (labelled R12, mm), individual cut IDs, panel contours, stock BOM, hardware list, JSON and source provenance.
       </p>
       <label className="field">Frame assembly<select value={runIds.includes(runId)?runId:'all'} onChange={e=>setRunId(e.target.value)}><option value="all">All continuous frames</option>{runIds.map(id=><option key={id} value={id}>{id} · Wall {job.bars.find(b=>b.runId===id).wall}</option>)}</select></label>
       <button className="primary" disabled={pdfBusy||!runIds.length} onClick={exportAssembly}>{pdfBusy?'Preparing PDF…':'Download frame assembly PDF'}</button>
@@ -302,7 +301,7 @@ export function FabricationResults({ job, onSelect }) {
         </div>
       </details>
       <details open>
-        <summary>Nested sheets — real panel outlines</summary>
+        <summary>Nested sheets — real panel outlines, each with a CNC DXF</summary>
         <div className="sheet-nests">
           {job.sheetNest.sheets.map((s) => (
             <article key={s.id}>
@@ -318,6 +317,7 @@ export function FabricationResults({ job, onSelect }) {
                 % blank-area use
               </p>
               <div dangerouslySetInnerHTML={{ __html: sheetSVG(s) }} />
+              <button className="secondary compact" onClick={() => downloadSheetDXF(s)}>Download CNC DXF for {s.id}</button>
             </article>
           ))}
         </div>

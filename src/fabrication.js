@@ -390,22 +390,177 @@ export function placedOutline(p) {
     p.rotated ? [p.x + y, p.y + p.cutW - x] : [p.x + x, p.y + y],
   );
 }
+// Distinct, printable colours shared by every drawing and the DXF so one
+// cabinet keeps the same colour across bars, sheets and reports.
+const PART_COLORS = [
+  "#4e79a7", "#f28e2b", "#e15759", "#76b7b2", "#59a14f", "#edc948",
+  "#b07aa1", "#ff9da7", "#9c755f", "#86bc86", "#d37295", "#a0cbe8",
+  "#ffbe7d", "#8cd17d", "#f1ce63", "#d4a6c8", "#bab0ac", "#b6992d",
+  "#79706e", "#e8a5a5",
+];
+const colorKey = (part) =>
+  String((part.unitIds && part.unitIds[0]) || part.id || "?");
+export function partColor(part) {
+  let h = 5381;
+  const s = colorKey(part);
+  for (let i = 0; i < s.length; i++) h = ((h << 5) + h + s.charCodeAt(i)) >>> 0;
+  return PART_COLORS[h % PART_COLORS.length];
+}
+const halo = (w) => `paint-order:stroke;stroke:#ffffff;stroke-width:${round(Math.max(2, w))}px;stroke-linejoin:round`;
+function legendRow(parts, y, fs) {
+  const size = fs * 1.05;
+  const groups = new Map();
+  for (const p of parts) {
+    const key = colorKey(p);
+    groups.set(key, (groups.get(key) || 0) + 1);
+  }
+  let x = fs * 0.8;
+  const cells = [];
+  for (const [key, n] of groups) {
+    const color = partColor({ unitIds: [key] });
+    const text = `${esc(key)} ×${n}`;
+    cells.push(
+      `<rect x="${round(x)}" y="${round(y)}" width="${round(size)}" height="${round(size)}" rx="${round(size * 0.2)}" fill="${color}" stroke="#31484d" stroke-width="${round(Math.max(1, size * 0.07))}"/>` +
+        `<text x="${round(x + size * 1.3)}" y="${round(y + size * 0.82)}" font-family="Arial" font-size="${round(fs)}" font-weight="600" fill="#16303a">${text}</text>`,
+    );
+    x += size * 1.3 + text.length * fs * 0.56 + fs * 1.6;
+  }
+  return `<g class="legend">${cells.join("")}</g>`;
+}
 export function sheetSVG(sheet) {
-  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${sheet.width} ${sheet.height}" role="img" aria-label="${esc(sheet.id)}"><rect width="${sheet.width}" height="${sheet.height}" fill="#edf1ed" stroke="#526b6a" stroke-width="3"/>${sheet.placements
-    .map(
-      (p) =>
-        `<g><title>${esc(p.id)}: ${round(p.w)} x ${round(p.h)} mm${p.rotated ? " rotated" : ""}</title><polygon points="${placedOutline(
-          p,
-        )
-          .map((v) => v.join(","))
-          .join(
-            " ",
-          )}" fill="#b9d3d1" stroke="#245359" stroke-width="2"/><text x="${p.x + p.w / 2}" y="${p.y + p.h / 2}" font-family="Arial" font-size="${Math.max(8, Math.min(22, (p.w / Math.max(1, p.id.length)) * 1.4, p.h * 0.4))}" text-anchor="middle" fill="#163d43">${esc(p.id)}</text></g>`,
-    )
-    .join("")}</svg>`;
+  const W = sheet.width;
+  const fs = Math.max(16, W / 34);
+  const legendH = fs * 2.1;
+  const strokeW = Math.max(2, W / 400);
+  const drawn = sheet.placements
+    .map((p) => {
+      const cx = p.x + p.w / 2,
+        cy = p.y + p.h / 2,
+        size = Math.max(
+          fs * 0.55,
+          Math.min(W / 30, p.w / Math.max(1, p.id.length * 0.62), p.h * 0.5),
+        );
+      return `<g><title>${esc(p.id)} · ${esc(p.name || "")} · ${round(p.cutW)} × ${round(p.cutH)} mm · ${esc((p.unitIds || []).join(" "))}${p.rotated ? " · rotated" : ""}</title><polygon points="${placedOutline(p)
+        .map((v) => v.join(","))
+        .join(" ")}" fill="${partColor(p)}" stroke="#123d43" stroke-width="${round(strokeW)}"/><text x="${round(cx)}" y="${round(cy + size * 0.35)}" font-family="Arial" font-size="${round(size)}" font-weight="600" text-anchor="middle" fill="#10262b" style="${halo(size * 0.18)}">${esc(p.id)}</text></g>`;
+    })
+    .join("");
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${W} ${round(sheet.height + legendH)}" role="img" aria-label="${esc(sheet.id)}"><rect width="${W}" height="${sheet.height}" fill="#edf1ed" stroke="#526b6a" stroke-width="${round(strokeW * 1.5)}"/>${drawn}${legendRow(sheet.placements, sheet.height + fs * 0.35, fs * 0.8)}</svg>`;
 }
 export function barSVG(stock) {
-  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${stock.length} 180" role="img" aria-label="${esc(stock.id)}"><rect width="${stock.length}" height="180" fill="#e1e6e2"/>${stock.cuts.map((p) => `<g><title>${esc(p.id)}: ${round(p.length)} mm, ${p.miterStart}/${p.miterEnd} degrees</title><rect x="${p.offset}" width="${p.length}" height="180" fill="#77a6a5" stroke="#fff" stroke-width="3"/><text x="${p.offset + p.length / 2}" y="100" font-family="Arial" font-size="${Math.min(55, (p.length / Math.max(1, p.id.length)) * 1.5)}" text-anchor="middle">${esc(p.id)}</text></g>`).join("")}</svg>`;
+  const L = stock.length;
+  const H = Math.max(170, Math.min(460, L / 7));
+  const TOP = H * 0.18,
+    BOT = TOP + H,
+    VIEWH = BOT + H * 0.72;
+  const strokeW = Math.max(2, L / 900);
+  const piece = (p) => {
+    const x0 = p.offset,
+      x1 = p.offset + p.length,
+      pw = p.length;
+    const dxS = p.miterStart
+        ? Math.min(pw * 0.35, H * Math.tan((p.miterStart * Math.PI) / 180))
+        : 0,
+      dxE = p.miterEnd
+        ? Math.min(pw * 0.35, H * Math.tan((p.miterEnd * Math.PI) / 180))
+        : 0;
+    const pts = [
+      [x0 + dxS, TOP],
+      [x1 - dxE, TOP],
+      [x1, BOT],
+      [x0, BOT],
+    ]
+      .map((v) => v.map(round).join(","))
+      .join(" ");
+    const idSize = Math.min(H * 0.34, pw / Math.max(1, p.id.length * 0.62), H * 0.5);
+    const id = idSize >= H * 0.09
+      ? `<text x="${round((x0 + x1) / 2)}" y="${round(TOP + H * 0.46)}" font-family="Arial" font-size="${round(idSize)}" font-weight="700" text-anchor="middle" fill="#10262b" style="${halo(idSize * 0.16)}">${esc(p.id)}</text>`
+      : "";
+    const lenFs = H * 0.155;
+    const len = pw >= idSize * 4
+      ? `<text x="${round((x0 + x1) / 2)}" y="${round(TOP + H * 0.79)}" font-family="Arial" font-size="${round(lenFs)}" font-weight="600" text-anchor="middle" fill="#16303a" style="${halo(lenFs * 0.16)}">${round(p.length)}</text>`
+      : "";
+    const mitFs = H * 0.13;
+    const mitres = [
+      p.miterStart && dxS > H * 0.18
+        ? `<text x="${round(x0 + dxS + mitFs * 0.7)}" y="${round(TOP + H * 0.2)}" font-family="Arial" font-size="${round(mitFs)}" font-weight="600" fill="#8a3524">${p.miterStart}°</text>`
+        : "",
+      p.miterEnd && dxE > H * 0.18
+        ? `<text x="${round(x1 - dxE - mitFs * 0.7)}" y="${round(TOP + H * 0.2)}" font-family="Arial" font-size="${round(mitFs)}" font-weight="600" text-anchor="end" fill="#8a3524">${p.miterEnd}°</text>`
+        : "",
+    ].join("");
+    return `<g><title>${esc(p.id)} · ${esc(p.name || "")} · ${round(p.length)} mm · ${p.miterStart}/${p.miterEnd}° · ${esc((p.unitIds || []).join(" "))}</title><polygon points="${pts}" fill="${partColor(p)}" stroke="#123f45" stroke-width="${round(strokeW)}"/>${mitres}${id}${len}</g>`;
+  };
+  const cuts = [...stock.cuts];
+  const lastEnd = cuts.length
+    ? Math.max(...cuts.map((c) => c.offset + c.length))
+    : 0;
+  const leftover = L - lastEnd;
+  const leftoverRect =
+    leftover > 1
+      ? `<g><rect x="${round(lastEnd)}" y="${round(TOP)}" width="${round(leftover)}" height="${round(H)}" fill="#f7faf7" stroke="#9fb3ac" stroke-width="${round(strokeW * 0.6)}" stroke-dasharray="${round(strokeW * 3)} ${round(strokeW * 2)}"/>${
+          leftover > H * 1.8
+            ? `<text x="${round(lastEnd + leftover / 2)}" y="${round(TOP + H * 0.56)}" font-family="Arial" font-size="${round(H * 0.15)}" font-weight="600" text-anchor="middle" fill="#6d8382">leftover ${round(leftover)}</text>`
+            : ""
+        }</g>`
+      : "";
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${L} ${round(VIEWH)}" role="img" aria-label="${esc(stock.id)}"><rect width="${L}" height="${round(VIEWH)}" fill="#fbfdfb"/><rect x="0" y="${round(TOP)}" width="${L}" height="${round(H)}" fill="#e1e6e2"/><text x="${round(L * 0.004)}" y="${round(H * 0.13)}" font-family="Arial" font-size="${round(H * 0.15)}" font-weight="700" fill="#31565c">${esc(stock.id)} · ${esc(stock.profile)} · stock ${round(L)} mm · cuts run left → right · colour = cabinet</text>${stock.cuts.map(piece).join("")}${leftoverRect}${legendRow(stock.cuts, BOT + H * 0.12, H * 0.155)}</svg>`;
+}
+// CNC-ready DXF R12 (AC1009), millimetres, origin bottom-left, Y up.
+// Layers: CUT (contours) · LABEL (part id + size) · SHEET (blank edge) · INFO (title).
+export function sheetDXF(sheet) {
+  const f = (n) => String(round(n));
+  const L = [];
+  const P = (...a) => L.push(...a);
+  P("0", "SECTION", "2", "HEADER",
+    "9", "$ACADVER", "1", "AC1009",
+    "9", "$INSBASE", "10", "0", "20", "0", "30", "0",
+    "9", "$EXTMIN", "10", "0", "20", "0", "30", "0",
+    "9", "$EXTMAX", "10", f(sheet.width), "20", f(sheet.height), "30", "0",
+    "9", "$MEASUREMENT", "70", "1",
+    "0", "ENDSEC");
+  const layers = [["CUT", 1], ["LABEL", 3], ["SHEET", 8], ["INFO", 5]];
+  P("0", "SECTION", "2", "TABLES", "0", "TABLE", "2", "LAYER", "70", String(layers.length));
+  for (const [name, color] of layers)
+    P("0", "LAYER", "2", name, "70", "0", "62", String(color), "6", "CONTINUOUS");
+  P("0", "ENDTAB", "0", "ENDSEC");
+  P("0", "SECTION", "2", "BLOCKS", "0", "ENDSEC");
+  const line = (layer, x1, y1, x2, y2) =>
+    P("0", "LINE", "8", layer,
+      "10", f(x1), "20", f(y1), "30", "0",
+      "11", f(x2), "21", f(y2), "31", "0");
+  const text = (layer, x, y, h, str) =>
+    P("0", "TEXT", "8", layer,
+      "10", f(x), "20", f(y), "30", "0",
+      "40", f(h), "1", String(str).replace(/[\r\n]+/g, " "));
+  P("0", "SECTION", "2", "ENTITIES");
+  line("SHEET", 0, 0, sheet.width, 0);
+  line("SHEET", sheet.width, 0, sheet.width, sheet.height);
+  line("SHEET", sheet.width, sheet.height, 0, sheet.height);
+  line("SHEET", 0, sheet.height, 0, 0);
+  text("INFO", 10, sheet.height - 26, 16,
+    `${sheet.id} | ${sheet.material} ${sheet.thickness}mm | blank ${sheet.width}x${sheet.height} | ${sheet.placements.length} parts | ENGINEERING REVIEW - NOT MACHINE RELEASE`);
+  for (const p of sheet.placements) {
+    const pts = placedOutline(p).map(([x, y]) => [x, sheet.height - y]);
+    for (let i = 0; i < pts.length; i++) {
+      const [x1, y1] = pts[i], [x2, y2] = pts[(i + 1) % pts.length];
+      line("CUT", x1, y1, x2, y2);
+    }
+    const xs = pts.map((v) => v[0]), ys = pts.map((v) => v[1]);
+    const cx = (Math.min(...xs) + Math.max(...xs)) / 2,
+      cy = (Math.min(...ys) + Math.max(...ys)) / 2;
+    const wmm = p.rotated ? p.cutH : p.cutW,
+      hmm = p.rotated ? p.cutW : p.cutH;
+    const label = String(p.id),
+      dims = `${f(wmm)}x${f(hmm)}`;
+    const h1 = Math.max(6, Math.min(20, p.w * 0.6 / Math.max(1, label.length) * 1.6, p.h * 0.4));
+    const h2 = Math.max(4.5, h1 * 0.66);
+    text("LABEL", cx - (label.length * h1 * 0.31), cy + h1 * 0.2, h1, label);
+    if (p.w > 130 && p.h > 60)
+      text("LABEL", cx - (dims.length * h2 * 0.31), cy - h1 * 0.75, h2, dims);
+  }
+  P("0", "ENDSEC", "0", "EOF");
+  return L.join("\r\n") + "\r\n";
 }
 function csv(headers, rows) {
   return [headers, ...rows]
@@ -482,13 +637,19 @@ export function fabricationFiles(job) {
     ),
     "READ-ME.txt": [
       job.status,
+      "CONTENTS — bar-cuts.csv and panel-cuts.csv list every cut (ID, cabinet, size, mitre).",
+      "BAR-n-review.svg: colour-coded cut plan per stock bar (colour = cabinet, mitre angles shown).",
+      "SHEET-n-review.svg: nested panel layout, colour = cabinet.",
+      "SHEET-n-cnc.dxf: CNC-ready DXF R12 in millimetres, origin at bottom-left, Y up. Layers: CUT (contours), LABEL (part id + size), SHEET (blank edge), INFO (title).",
       ...job.errors,
       ...job.rejected.map((r) => `${r.id}: ${r.reason}`),
       ...job.warnings,
     ].join("\n\n"),
   };
-  for (const sheet of job.sheetNest.sheets)
+  for (const sheet of job.sheetNest.sheets) {
     files[`${sheet.id}-review.svg`] = sheetSVG(sheet);
+    files[`${sheet.id}-cnc.dxf`] = sheetDXF(sheet);
+  }
   for (const stock of job.barNest.stocks)
     files[`${stock.id}-review.svg`] = barSVG(stock);
   return files;
