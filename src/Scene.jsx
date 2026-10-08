@@ -391,8 +391,17 @@ function createUnit(root, p, u, settings, mats) {
         );
         g.add(burner);
       }
-      box(g, w, 65, 450, 0, 1550, 0, steel, "Hood");
-      box(g, 250, 450, 230, (w - 250) / 2, 1615, 0, steel, "Hood duct");
+      // Hood/flue spec must match reference/sketchup_planner.rb L1118-1138:
+      // hood base = max(wall-row z + 40, 1540), canopy 75, flue 260x240,
+      // flue rises to the wall-cabinet top datum (top_z + 720) with 500 min.
+      const wallZ = TYPES.wall?.z ?? 1450,
+        wallTop = wallZ + (p.unitDefaults?.wall?.h ?? TYPES.wall?.h ?? 720),
+        hoodBase = Math.max(wallZ + 40, 1540),
+        canopyH = 75,
+        hoodTop = hoodBase + canopyH,
+        flueH = Math.max(wallTop - hoodTop, 500);
+      box(g, w, canopyH, 450, 0, hoodBase, 0, steel, "Hood");
+      box(g, 260, flueH, 240, (w - 260) / 2, hoodTop, 0, steel, "Hood duct");
     }
   }
   if (settings.selected === u.id) {

@@ -1,0 +1,227 @@
+<!doctype html>
+<!-- ============================================================
+     TEMPORARY MOCK — cooker unit hood/flue height fix preview.
+     Editable standalone page: adjust sliders, toggle Before/After.
+     NOT part of the app build. Safe to delete anytime.
+     Geometry mirrors the app (mm, wall B orientation, 3 bays:
+     left base / cooker+bay / right base, wall cabinets above).
+     ============================================================ -->
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>AJ Kitchen — cooker hood/duct fix (editable mock)</title>
+<style>
+  :root{--bg:#eef2ef;--panel:#fff;--ink:#20261f;--mut:#5d665e;--acc:#2f6d4f;--warn:#b3391f;--line:#d7ded8}
+  *{box-sizing:border-box} html,body{margin:0;height:100%;font:14px/1.45 "Segoe UI",system-ui,sans-serif;color:var(--ink)}
+  #app{display:flex;height:100%}
+  #stage{flex:1;position:relative;background:var(--bg);min-width:0}
+  #stage canvas{display:block;width:100%;height:100%}
+  #hint{position:absolute;left:12px;bottom:10px;color:var(--mut);background:#ffffffcc;border:1px solid var(--line);border-radius:6px;padding:4px 8px;font-size:12px}
+  #err{position:absolute;inset:20px;display:none;background:#fff5f2;border:1px solid var(--warn);color:var(--warn);border-radius:8px;padding:14px}
+  #panel{width:372px;background:var(--panel);border-left:1px solid var(--line);padding:14px 14px 40px;overflow:auto}
+  h1{font-size:16px;margin:2px 0 2px}
+  .sub{color:var(--mut);font-size:12px;margin:0 0 12px}
+  .row{display:flex;gap:6px;flex-wrap:wrap;margin:8px 0}
+  button{border:1px solid var(--line);background:#f7faf7;border-radius:6px;padding:5px 10px;cursor:pointer;font:inherit}
+  button.on{background:var(--acc);border-color:var(--acc);color:#fff}
+  fieldset{border:1px solid var(--line);border-radius:8px;margin:10px 0;padding:8px 10px}
+  legend{font-size:12px;color:var(--mut);padding:0 4px}
+  .ctl{display:grid;grid-template-columns:150px 1fr 58px;gap:6px;align-items:center;margin:6px 0;font-size:12px}
+  .ctl input[type=range]{width:100%}
+  .ctl output{text-align:right;font-variant-numeric:tabular-nums}
+  .ctl b{font-weight:600}
+  #readout{background:#f4f8f4;border:1px solid var(--line);border-radius:8px;padding:8px 10px;font-size:12px;margin:10px 0}
+  #readout b{font-variant-numeric:tabular-nums}
+  .bad{color:var(--warn)} .good{color:var(--acc)}
+  .notes{font-size:12px;color:var(--mut);border-top:1px dashed var(--line);margin-top:12px;padding-top:8px}
+  .notes li{margin:4px 0}
+  .tag{display:inline-block;background:#eef4ef;border:1px solid var(--line);border-radius:4px;padding:0 5px;font-size:11px;color:var(--mut)}
+</style>
+</head>
+<body>
+<div id="app">
+  <div id="stage">
+    <canvas id="cv"></canvas>
+    <div id="hint">drag = orbit · wheel = zoom · right-drag = pan</div>
+    <div id="err"></div>
+  </div>
+  <aside id="panel">
+    <h1>Cooker unit — hood &amp; duct height fix <span class="tag">temporary mock</span></h1>
+    <p class="sub">Editable preview — move the sliders, switch <b>Before / After</b>, and try the app's view modes. This page is standalone; it does not touch the real app.</p>
+    <div class="row">
+      <button id="pBefore">Before (old app)</button>
+      <button id="pAfter" class="on">After (fix)</button>
+    </div>
+    <fieldset><legend>Dimensions (mm)</legend><div id="ctls"></div></fieldset>
+    <fieldset><legend>View mode (like the app)</legend>
+      <div class="row" id="modes">
+        <button data-m="finished" class="on">Finished</button>
+        <button data-m="carcass">Frame + carcass</button>
+        <button data-m="frame">Frame only</button>
+      </div>
+      <div class="row">
+        <button id="vFront">Front</button><button id="vSide">Side</button><button id="vCorner">Corner</button>
+      </div>
+    </fieldset>
+    <div id="readout"></div>
+    <div class="notes">
+      <b>What was wrong (before):</b>
+      <ul>
+        <li class="bad">Duct was fixed 450&nbsp;mm: 1615 → <b>2065</b> — floating <b>105&nbsp;mm below</b> the tops of the wall cabinets. Wrong height.</li>
+        <li class="bad">Hood base 1550 / canopy 65 didn't match the shop reference (1540 / 75).</li>
+      </ul>
+      <b>What changed (after):</b>
+      <ul>
+        <li class="good">Duct (260×240) rises from hood top 1615 up to the <b>wall-cabinet top datum 2170</b> (= wall row 1450 + 720), min 500 — lands level with the uppers, exactly like the SketchUp reference.</li>
+        <li class="good">Hood base = max(wall row z + 40, 1540), canopy 75 — reference parity.</li>
+        <li>Cabinet under the hob was checked in the app: doors, carcass and bars are built with the run. Use <b>Frame + carcass</b> / <b>Frame only</b> here to see the cooker bay is part of the continuous base frame.</li>
+      </ul>
+    </div>
+  </aside>
+</div>
+<script type="importmap">
+{"imports":{
+  "three":"https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+  "three/addons/":"https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+}}
+</script>
+<script type="module">
+import * as T from 'three';
+import {OrbitControls} from 'three/addons/controls/OrbitControls.js';
+
+const showErr=m=>{const e=document.getElementById('err');e.style.display='block';e.textContent='Render error: '+m;};
+addEventListener('error',e=>showErr(e.message));
+
+/* ---------- params (editable) ---------- */
+const OLD={hoodBase:1550,canopy:65,flueW:250,flueD:230,ductFixed:450};
+const P={wallZ:1450,wallH:720,hoodBase:1540,canopy:75,flueW:260,flueD:240,minFlue:500,ductMode:'wallTop'};
+const CFG=[
+ ['wallZ','Wall row bottom z',1200,1700,10],
+ ['wallH','Wall row height',400,900,10],
+ ['hoodBase','Hood base (z)',1400,1800,5],
+ ['canopy','Canopy height',50,120,5],
+ ['flueW','Duct width',200,320,5],
+ ['flueD','Duct depth',200,320,5],
+ ['minFlue','Min duct length',300,900,10],
+];
+const wallTop=()=>P.wallZ+P.wallH;
+const hoodTop=()=>P.hoodBase+P.canopy;
+const ductTop=()=>P.ductMode==='fixed'?Math.min(hoodTop()+OLD.ductFixed,10**6):hoodTop()+Math.max(wallTop()-hoodTop(),P.minFlue);
+
+/* ---------- three setup ---------- */
+const cv=document.getElementById('cv');
+const renderer=new T.WebGLRenderer({canvas:cv,antialias:true});
+renderer.setPixelRatio(Math.min(devicePixelRatio,2));
+renderer.outputColorSpace=T.SRGBColorSpace;
+const scene=new T.Scene();scene.background=new T.Color('#eef2ef');
+scene.add(new T.HemisphereLight('#ffffff','#9aa79d',1.15));
+const sun=new T.DirectionalLight('#fff3dd',1.6);sun.position.set(-2200,3400,3600);scene.add(sun);
+const sun2=new T.DirectionalLight('#e8f0ff',.5);sun2.position.set(2600,1600,-1800);scene.add(sun2);
+const camera=new T.PerspectiveCamera(34,1,10,60000);
+const controls=new OrbitControls(camera,renderer.domElement);
+controls.enableDamping=true;controls.dampingFactor=.08;
+
+const matCache=new Map();
+const mat=c=>{if(!matCache.has(c))matCache.set(c,new T.MeshStandardMaterial({color:c,roughness:.82,metalness:.05}));return matCache.get(c)};
+const steelM=new T.MeshStandardMaterial({color:'#c8cdcb',roughness:.32,metalness:.55});
+const glassM=new T.MeshStandardMaterial({color:'#3a3d3f',roughness:.5,metalness:.2});
+let root=null;
+function box(parent,w,h,d,x,y,z,m,name){const g=new T.BoxGeometry(w,h,d);const me=new T.Mesh(g,m);me.position.set(x+w/2,y+h/2,z+d/2);me.name=name||'';parent.add(me);return me;}
+function ruler(parent,y,color,z){const g=new T.Group();const m=new T.MeshStandardMaterial({color,emissive:color,emissiveIntensity:.4,roughness:.55});for(let x=2150;x>-350;x-=150){const me=new T.Mesh(new T.BoxGeometry(90,8,8),m);me.position.set(x-45,y,z);g.add(me);}parent.add(g);return g;}
+function label(parent,text,color,x,y,z,s){const c=document.createElement('canvas');c.width=1024;c.height=160;const g=c.getContext('2d');g.font='700 76px "Segoe UI",sans-serif';g.textAlign='left';g.textBaseline='middle';g.fillStyle=color;g.fillText(text,10,80);const t=new T.CanvasTexture(c);t.colorSpace=T.SRGBColorSpace;const sp=new T.Sprite(new T.SpriteMaterial({map:t,transparent:true,depthTest:false}));const k=(s||1)*0.9;sp.scale.set(c.width*k,c.height*k,1);sp.position.set(x,y,z);parent.add(sp);return sp;}
+
+/* geometry: wall along x, depth +z, height y. 3 bays of 600: [0..600][600..1200 cooker][1200..1800] */
+function bay(parent,x0,x1,mode){
+  const w=x1-x0;
+  if(mode==='finished'){
+    box(parent,w-6,800,18,x0+3,45,585,mat('#c2c9c6'),'door');
+    box(parent,w-10,22,6,x0+5,829,600,glassM,'j-pull');
+  }else{
+    const barW=40,acp=mat('#dce2da'),steel=steelM;
+    box(parent,barW,810,barW,x0+2,30,2,steel,'post');box(parent,barW,810,barW,x1-barW-2,30,2,steel,'post');
+    box(parent,w-4,barW,barW,x0+2,826,2,steel,'top-rail');
+    box(parent,w-4,barW,barW,x0+2,30,2,steel,'bottom-rail');
+    box(parent,w-4,120,barW,x0+2,0,2,steel,'plinth');
+    if(mode==='carcass'){
+      box(parent,w-4,18,600-2,x0+2,60,1,acp,'bottom-panel');
+      box(parent,w-4,790-60,18,x0+2,60+18,1,acp,'rear-cladding');
+      box(parent,w-4,18,560,x0+2,470,20,acp,'shelf');
+    }
+  }
+}
+function build(){
+  if(root){scene.remove(root);root.traverse(o=>{o.geometry&&o.geometry.dispose&&o.geometry.dispose();});}
+  root=new T.Group();scene.add(root);
+  const mode=P.mode||'finished';
+  // room context
+  box(root,3600,2900,30,-600,0,-40,mat('#f1f4f0'),'wall');
+  box(root,3600,30,1200,-600,-30,0,mat('#e4e9e3'),'floor');
+  const ceil=new T.Mesh(new T.BoxGeometry(3600,20,1200),new T.MeshStandardMaterial({color:'#f7faf7',transparent:true,opacity:.55}));
+  ceil.position.set(1200,2700,560);root.add(ceil);
+  // base bays
+  bay(root,0,600,mode);bay(root,600,1200,mode);bay(root,1200,1800,mode);
+  // worktop
+  box(root,1860,25,625,-30,850,0,mat('#f4f6f2'),'worktop');
+  // wall cabinets (the datum context), only in finished-ish views
+  const wc=(x0,x1)=>{box(root,x1-x0,P.wallH,350,x0,P.wallZ,0,mat('#cfd6d0'),'wall-cabinet');box(root,(x1-x0)-8,P.wallH-90,16,x0+4,P.wallZ+45,336,mat('#c2c9c6'),'wall-door');};
+  wc(0,600);wc(1200,1800);
+  if(mode!=='frame'){
+    // hob
+    box(root,540,8,470,630,875,70,glassM,'hob');
+    for(let i=0;i<4;i++){const b=new T.Mesh(new T.TorusGeometry(60,5,8,30),steelM);b.rotation.x=-Math.PI/2;b.position.set(630+155+(i%2)*230,884,70+135+Math.floor(i/2)*200);root.add(b);}
+    // hood + duct (the fix)
+    box(root,600,P.canopy,450,600,P.hoodBase,0,steelM,'hood');
+    box(root,P.flueW,Math.max(ductTop()-hoodTop(),1),P.flueD,600+(600-P.flueW)/2,hoodTop(),0,steelM,'duct');
+  }
+  // datum markers (chunky overlay rulers, drawn in front of everything at z=640)
+  ruler(root,2065,'#b3391f',640);
+  label(root,'OLD duct top 2065 — 105 below uppers','#b3391f',-330,2135,690,0.62);
+  ruler(root,wallTop(),'#2f6d4f',640);
+  label(root,`Wall-cabinet top ${wallTop()} = duct target`,'#2f6d4f',-330,wallTop()+75,690,0.62);
+  ruler(root,2700,'#7c857d',640);
+  label(root,'ceiling 2700','#7c857d',-330,2745,690,0.62);
+  label(root,'hob + hood unit','#20261f',700,940,700,0.6);
+  render();
+  updReadout();
+}
+function updReadout(){
+  const r=document.getElementById('readout');
+  const top=ductTop(),wt=wallTop(),short=wt-top;
+  r.innerHTML=
+   `Duct: <b>${hoodTop()}</b> → <b>${Math.round(top)}</b> (length <b>${Math.round(top-hoodTop())}</b> mm)<br>`+
+   `Wall-cabinet top: <b>${wt}</b> · ceiling: 2700<br>`+
+   (short>0?`<span class="bad">Duct stops <b>${Math.round(short)}</b> mm below the wall-cabinet top.</span>`:`<span class="good">Duct lands level with / above the wall-cabinet top.</span>`);
+}
+/* ---------- controls ---------- */
+const ctls=document.getElementById('ctls');
+for(const [key,lab,min,max,step] of CFG){
+  const d=document.createElement('div');d.className='ctl';
+  d.innerHTML=`<b>${lab}</b><input type="range" min="${min}" max="${max}" step="${step}" value="${P[key]}"><output>${P[key]}</output>`;
+  const inp=d.querySelector('input'),out=d.querySelector('output');
+  inp.oninput=()=>{P[key]=+inp.value;out.value=inp.value;build();};
+  ctls.appendChild(d);
+}
+function setSlider(key,v){const i=[...ctls.querySelectorAll('.ctl')].find(d=>d.querySelector('b').textContent.startsWith(CFG.find(c=>c[0]===key)[1]));if(i){i.querySelector('input').value=v;i.querySelector('output').value=v;}P[key]=v;}
+const pBefore=document.getElementById('pBefore'),pAfter=document.getElementById('pAfter');
+function preset(which){
+  if(which==='before'){Object.assign(P,{hoodBase:OLD.hoodBase,canopy:OLD.canopy,flueW:OLD.flueW,flueD:OLD.flueD,ductMode:'fixed'});pBefore.classList.add('on');pAfter.classList.remove('on');}
+  else{Object.assign(P,{hoodBase:Math.max(P.wallZ+40,1540),canopy:75,flueW:260,flueD:240,ductMode:'wallTop'});pAfter.classList.add('on');pBefore.classList.remove('on');}
+  for(const [key] of CFG)setSlider(key,P[key]);build();
+}
+pBefore.onclick=()=>preset('before');pAfter.onclick=()=>preset('after');
+document.getElementById('modes').addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;[...e.currentTarget.children].forEach(x=>x.classList.toggle('on',x===b));P.mode=b.dataset.m;build();});
+const views={front:[[900,1450,4700],[900,1400,250]],side:[[-3300,1450,260],[900,1400,260]],corner:[[3500,2600,4300],[900,1350,250]]};
+function setView(v){const [p,t]=views[v];camera.position.set(...p);controls.target.set(...t);controls.update();render();}
+document.getElementById('vFront').onclick=()=>setView('front');
+document.getElementById('vSide').onclick=()=>setView('side');
+document.getElementById('vCorner').onclick=()=>setView('corner');
+/* ---------- render loop ---------- */
+function size(){const s=document.getElementById('stage');renderer.setSize(s.clientWidth,s.clientHeight,false);camera.aspect=s.clientWidth/s.clientHeight;camera.updateProjectionMatrix();}
+addEventListener('resize',size);
+function render(){renderer.render(scene,camera);}
+(function loop(){requestAnimationFrame(loop);controls.update();render();})();
+size();setView('corner');build();
+</script>
+</body>
+</html>
