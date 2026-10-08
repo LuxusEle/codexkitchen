@@ -41,6 +41,7 @@ import QuoteSummary from './QuoteSummary.jsx';
 import {standardHeightFor} from './standards.js';
 import {downloadCuttingZip,downloadAssemblyPdf,downloadCostPdf} from './workshop-pack.js';
 import {kitchenEstimate} from './costing.js';
+import OutputWindow from './OutputWindow.jsx';
 import {removeCabinet,canUndoCabinet} from './cabinet-actions.js';
 import {cloudRequest} from './cloud-client.js';
 import {projectIdentity,projectContent,writeDraft,removeDraft,detachedProject} from './project-workspace.js';
@@ -333,7 +334,8 @@ function App({account,initialDocument,initialDirty,onDashboard}) {
     [editableBoxes, setEditableBoxes] = useState([]),
     [planRow, setPlanRow] = useState('all'),
     [cloudOpen,setCloudOpen] = useState(false),
-    [issuesOpen,setIssuesOpen] = useState(false);
+    [issuesOpen,setIssuesOpen] = useState(false),
+    [outputsOpen,setOutputsOpen] = useState(false);
   const dirty=projectContent(p)!==savedContent;
   const currentProject=useRef(p);currentProject.current=p;
   const scene = useRef(),
@@ -348,6 +350,7 @@ function App({account,initialDocument,initialDirty,onDashboard}) {
   const islandCfg=useMemo(()=>islandSettings(p),[p]);
   const spaceAudit=useMemo(()=>auditCabinetSpace(p,plan.units),[p,plan]);
   const fabrication = useMemo(() => fabricationPlan(p, plan), [p, plan]);
+  const estimate = useMemo(() => kitchenEstimate(p, plan, fabrication), [p, plan, fabrication]);
   const settings = useMemo(
     () => ({ mode, walls, labels, selected, xray, explode, runId: frameRun, moveEnabled:dragEnabled, previewIds }),
     [mode, walls, labels, selected, xray, explode, frameRun, dragEnabled, previewIds],
@@ -1248,8 +1251,10 @@ function App({account,initialDocument,initialDirty,onDashboard}) {
       <p className="eyebrow">07 / WORKSHOP PACK</p>
       <h1>Your workshop pack, ready to cut.</h1>
       <p className="intro">
-        Download the complete outputs below — then, optionally, prepare
-        concept renders to present the idea with ChatGPT image creation.
+        Every report — stocks, cutlists, bar cutting, stickers, BOM, quote and
+        assembly guides — is shown in the new outputs window with export there.
+        Download the direct files below too, or prepare concept renders to
+        present the idea with ChatGPT image creation.
       </p>
       <section className="workshop-pack" id="workshop-pack">
         <div className="row between">
@@ -1257,13 +1262,16 @@ function App({account,initialDocument,initialDirty,onDashboard}) {
           <span className="small muted">{packBlockers.length ? `${packBlockers.length} point${packBlockers.length === 1 ? "" : "s"} block output` : "All checks passed"}</span>
         </div>
         <div className="row wrap">
-          <button className="primary compact" disabled={!!fabrication.errors.length || !!fabrication.rejected.length} onClick={() => { try { downloadCuttingZip(fabrication); setToast("Cutting review ZIP downloaded."); } catch (e) { setToast(e.message); } }}>
+          <button className="primary compact" onClick={() => setOutputsOpen(true)}>
+            <ClipboardCheck size={15} />Show all reports
+          </button>
+          <button className="secondary compact" disabled={!!fabrication.errors.length || !!fabrication.rejected.length} onClick={() => { try { downloadCuttingZip(fabrication); setToast("Cutting review ZIP downloaded."); } catch (e) { setToast(e.message); } }}>
             <Download size={15} />Cutting ZIP
           </button>
           <button className="secondary compact" disabled={!frameRunIds.length} onClick={() => downloadAssemblyPdf(fabrication, "all").then(() => setToast("Frame assembly sheets downloaded."), (e) => setToast(e.message))}>
             <Download size={15} />Frame assembly PDF
           </button>
-          <button className="secondary compact" onClick={() => downloadCostPdf(p, kitchenEstimate(p, plan, fabrication)).then(() => setToast("Cost + BOM PDF downloaded."), (e) => setToast(e.message))}>
+          <button className="secondary compact" onClick={() => downloadCostPdf(p, estimate).then(() => setToast("Cost + BOM PDF downloaded."), (e) => setToast(e.message))}>
             <Download size={15} />Cost + BOM PDF
           </button>
         </div>
@@ -1891,6 +1899,9 @@ function App({account,initialDocument,initialDirty,onDashboard}) {
             ×
           </button>
         </div>
+      )}
+      {outputsOpen && (
+        <OutputWindow p={p} plan={plan} job={fabrication} estimate={estimate} onClose={() => setOutputsOpen(false)} />
       )}
     </div>
   );
