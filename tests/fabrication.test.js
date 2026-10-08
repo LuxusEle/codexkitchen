@@ -582,3 +582,18 @@ test("ZIP carries per-profile bar stock totals (old-app BOM parity)", () => {
   assert.ok(/net cut length \d+\.\d+ m/.test(readme), "net cut length in metres");
   assert.ok(/stock required \d+\.\d+ m/.test(readme), "stock metres required");
 });
+
+test("Bar cut plans draw long bar segments with chamfer-annotated 45° ends", () => {
+  const p = initialProject(), plan = solve(p), job = fabricationPlan(p, plan);
+  const mitred = job.bars.find((b) => b.miterStart || b.miterEnd);
+  const stock = job.barNest.stocks.find((s) => s.cuts.some((c) => c.id === mitred.id));
+  const svg = barSVG(stock);
+  assert.ok(svg.includes('class="bar-cut"'), "pieces keep a long-bar silhouette");
+  assert.ok(svg.includes(">45°<"), "mitred ends are angle-labelled beside their chamfer");
+  assert.ok(
+    !/<polygon[^>]*points="[^"]*"[^>]*><\/polygon>/.test(svg),
+    "no degenerate polygons",
+  );
+  const plain = job.barNest.stocks.find((s) => s.cuts.every((c) => !c.miterStart && !c.miterEnd));
+  if (plain) assert.ok(!barSVG(plain).includes(">45°<"), "square ends carry no angle label");
+});

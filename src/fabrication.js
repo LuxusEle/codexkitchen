@@ -465,7 +465,9 @@ export function sheetSVG(sheet) {
 }
 export function barSVG(stock) {
   const L = stock.length;
-  const H = Math.max(170, Math.min(460, L / 7));
+  // Long-bar proportions (the old app drew a ~6% tall strip). Kept a little
+  // taller for label room, but the strip must read as ONE long bar.
+  const H = Math.max(150, Math.min(360, L / 18));
   const TOP = H * 0.18,
     BOT = TOP + H,
     VIEWH = BOT + H * 0.72;
@@ -474,54 +476,50 @@ export function barSVG(stock) {
     const x0 = p.offset,
       x1 = p.offset + p.length,
       pw = p.length;
-    const dxS = p.miterStart
-        ? Math.min(pw * 0.35, H * Math.tan((p.miterStart * Math.PI) / 180))
-        : 0,
-      dxE = p.miterEnd
-        ? Math.min(pw * 0.35, H * Math.tan((p.miterEnd * Math.PI) / 180))
-        : 0;
-    const pts = [
-      [x0 + dxS, TOP],
-      [x1 - dxE, TOP],
-      [x1, BOT],
-      [x0, BOT],
-    ]
-      .map((v) => v.map(round).join(","))
-      .join(" ");
-    const idSize = Math.min(H * 0.34, pw / Math.max(1, p.id.length * 0.62), H * 0.5);
+    // A true 45° end cut spans only 45 mm of length — invisible on a 6400 mm
+    // bar — so each mitred end is drawn as a small corner chamfer where the
+    // cut runs, with the angle printed beside it. The piece itself stays a
+    // long bar rectangle, never a tapering trapezoid.
+    const chS = p.miterStart ? Math.min(H * 0.4, pw * 0.16) : 0,
+      chE = p.miterEnd ? Math.min(H * 0.4, pw * 0.16) : 0;
+    const pts = [[x0, BOT], [x0, chS ? TOP + chS : TOP]];
+    if (chS) pts.push([x0 + chS, TOP]);
+    pts.push(chE ? [x1 - chE, TOP] : [x1, TOP]);
+    if (chE) pts.push([x1, TOP + chE]);
+    pts.push([x1, BOT]);
+    const ptsAttr = pts.map((v) => v.map(round).join(",")).join(" ");
+    const idSize = Math.min(H * 0.26, pw / Math.max(1, p.id.length * 0.72));
     const id = idSize >= H * 0.09
-      ? `<text x="${round((x0 + x1) / 2)}" y="${round(TOP + H * 0.46)}" font-family="Arial" font-size="${round(idSize)}" font-weight="700" text-anchor="middle" fill="#10262b" style="${halo(idSize * 0.16)}">${esc(p.id)}</text>`
+      ? `<text x="${round((x0 + x1) / 2)}" y="${round(TOP + H * 0.47)}" font-family="Arial" font-size="${round(idSize)}" font-weight="700" text-anchor="middle" fill="#10262b" style="${halo(idSize * 0.16)}">${esc(p.id)}</text>`
       : "";
-    const lenFs = H * 0.155;
+    const lenFs = H * 0.14;
     const len = pw >= idSize * 4
-      ? `<text x="${round((x0 + x1) / 2)}" y="${round(TOP + H * 0.79)}" font-family="Arial" font-size="${round(lenFs)}" font-weight="600" text-anchor="middle" fill="#16303a" style="${halo(lenFs * 0.16)}">${round(p.length)}</text>`
+      ? `<text x="${round((x0 + x1) / 2)}" y="${round(TOP + H * 0.82)}" font-family="Arial" font-size="${round(lenFs)}" font-weight="600" text-anchor="middle" fill="#16303a" style="${halo(lenFs * 0.16)}">${round(p.length)}</text>`
       : "";
-    // Angle labels sit inside each end's mitre notch — the void above the
-    // sloped cut — in the clear strip just under the top edge, above the big
-    // piece-id text, and are painted last so nothing can cover them. Every
-    // mitred end with room carries its angle beside the cut it describes
-    // (title tooltip and bar-cuts.csv always carry it regardless).
+    // The angle label rides the clear band under the top edge, right beside
+    // its own chamfer, above the big piece-id text; painted last so nothing
+    // can cover it (title tooltip and bar-cuts.csv carry the angle regardless).
     const mitFs = H * 0.115;
-    const mitLabelW = mitFs * 1.75;
-    const mitFrac = 0.13;
-    const mitLabelY = TOP + H * mitFrac;
-    const notchLabel = (dx, angle, ax, dir) => {
-      if (!angle || dx * (1 - mitFrac) < mitLabelW * 1.2) return "";
-      const lx = dir > 0 ? ax + (dx * (1 - mitFrac)) / 2 : ax - (dx * (1 - mitFrac)) / 2;
-      return `<text x="${round(lx)}" y="${round(mitLabelY)}" font-family="Arial" font-size="${round(mitFs)}" font-weight="600" text-anchor="middle" fill="#8a3524" style="${halo(mitFs * 0.16)}">${angle}°</text>`;
+    const mitLabel = (ch, angle, edgeX, anchor) => {
+      if (!angle || ch < mitFs * 1.1) return "";
+      const lx = anchor === "start" ? edgeX + mitFs * 0.55 : edgeX - mitFs * 0.55;
+      return `<text x="${round(lx)}" y="${round(TOP + H * 0.135)}" font-family="Arial" font-size="${round(mitFs)}" font-weight="600" text-anchor="${anchor}" fill="#8a3524" style="${halo(mitFs * 0.16)}">${angle}°</text>`;
     };
     const mitres = [
-      notchLabel(dxS, p.miterStart, x0, 1),
-      notchLabel(dxE, p.miterEnd, x1, -1),
+      mitLabel(chS, p.miterStart, x0 + chS, "start"),
+      mitLabel(chE, p.miterEnd, x1 - chE, "end"),
     ].join("");
     const hingeMarks = (p.hingeInserts || [])
       .map((s) => {
         const hx = x0 + s,
           mw = Math.max(1.4, strokeW * 0.7);
-        return `<g class="hinge"><line x1="${round(hx)}" y1="${round(TOP)}" x2="${round(hx)}" y2="${round(BOT)}" stroke="#8a3524" stroke-width="${round(mw)}" stroke-dasharray="${round(Math.max(5, strokeW * 3))} ${round(Math.max(4, strokeW * 2))}"/><circle cx="${round(hx)}" cy="${round(TOP + H * 0.74)}" r="${round(Math.max(4, H * 0.085))}" fill="none" stroke="#8a3524" stroke-width="${round(mw)}"/><title>Sash hinge + insert @ ${round(s)} from this end</title></g>`;
+        let topY = TOP;
+        if (hx - x0 < chS) topY = TOP + chS;
+        if (x1 - hx < chE) topY = Math.max(topY, TOP + chE);
+        return `<g class="hinge"><line x1="${round(hx)}" y1="${round(topY)}" x2="${round(hx)}" y2="${round(BOT)}" stroke="#8a3524" stroke-width="${round(mw)}" stroke-dasharray="${round(Math.max(5, strokeW * 3))} ${round(Math.max(4, strokeW * 2))}"/><circle cx="${round(hx)}" cy="${round(TOP + H * 0.74)}" r="${round(Math.max(4, H * 0.085))}" fill="none" stroke="#8a3524" stroke-width="${round(mw)}"/><title>Sash hinge + insert @ ${round(s)} from this end</title></g>`;
       })
       .join("");
-    return `<g><title>${esc(p.id)} · ${esc(p.name || "")} · ${round(p.length)} mm · ${p.miterStart}/${p.miterEnd}° · ${esc((p.unitIds || []).join(" "))}${p.hingeInserts?.length ? ` · sash hinge insert ×${p.hingeInserts.length} (${round(p.hingeInserts[0])} from each end)` : ""}</title><polygon points="${pts}" fill="${partColor(p)}" stroke="#123f45" stroke-width="${round(strokeW)}"/>${hingeMarks}${id}${len}${mitres}</g>`;
+    return `<g><title>${esc(p.id)} · ${esc(p.name || "")} · ${round(p.length)} mm · ${p.miterStart}/${p.miterEnd}° · ${esc((p.unitIds || []).join(" "))}${p.hingeInserts?.length ? ` · sash hinge insert ×${p.hingeInserts.length} (${round(p.hingeInserts[0])} from each end)` : ""}</title><polygon class="bar-cut" points="${ptsAttr}" fill="${partColor(p)}" stroke="#123f45" stroke-width="${round(strokeW)}"/>${hingeMarks}${id}${len}${mitres}</g>`;
   };
   const cuts = [...stock.cuts];
   const lastEnd = cuts.length
@@ -536,7 +534,7 @@ export function barSVG(stock) {
             : ""
         }</g>`
       : "";
-  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${L} ${round(VIEWH)}" role="img" aria-label="${esc(stock.id)}"><rect width="${L}" height="${round(VIEWH)}" fill="#fbfdfb"/><rect x="0" y="${round(TOP)}" width="${L}" height="${round(H)}" fill="#e1e6e2"/><text x="${round(L * 0.004)}" y="${round(H * 0.13)}" font-family="Arial" font-size="${round(H * 0.15)}" font-weight="700" fill="#31565c">${esc(stock.id)} · ${esc(stock.profile)} · stock ${round(L)} mm · cuts run left → right · colour = cabinet${stock.cuts.some((c) => c.hingeInserts?.length) ? " · ⌀ dashed = sash hinge insert" : ""}</text>${stock.cuts.map(piece).join("")}${leftoverRect}${legendRow(stock.cuts, BOT + H * 0.12, H * 0.155)}</svg>`;
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${L} ${round(VIEWH)}" role="img" aria-label="${esc(stock.id)}"><rect width="${L}" height="${round(VIEWH)}" fill="#fbfdfb"/><rect x="0" y="${round(TOP)}" width="${L}" height="${round(H)}" fill="#e1e6e2"/><text x="${round(L * 0.004)}" y="${round(H * 0.13)}" font-family="Arial" font-size="${round(H * 0.15)}" font-weight="700" fill="#31565c">${esc(stock.id)} · ${esc(stock.profile)} · stock ${round(L)} mm · cuts run left → right · colour = cabinet${stock.cuts.some((c) => c.miterStart || c.miterEnd) ? " · red 45° = mitred (chamfered) end cut" : ""}${stock.cuts.some((c) => c.hingeInserts?.length) ? " · ⌀ dashed = sash hinge insert" : ""}</text>${stock.cuts.map(piece).join("")}${leftoverRect}${legendRow(stock.cuts, BOT + H * 0.12, H * 0.155)}</svg>`;
 }
 // CNC nesting DXF in the master convention (cabinex_master.rb dxf/poly/label):
 // AC1015, millimetres ($INSUNITS 4), LTYPE+LAYER tables built from used layers.
@@ -721,7 +719,7 @@ export function fabricationFiles(job) {
     "READ-ME.txt": [
       job.status,
       "CONTENTS — bar-cuts.csv and panel-cuts.csv list every cut (ID, cabinet, size, mitre).",
-      "BAR-n-review.svg: colour-coded cut plan per stock bar (colour = cabinet, mitre angles shown).",
+      "BAR-n-review.svg: long-bar cut plan per stock bar — one 6400 mm (or 3000 mm) strip, every piece a coloured bar segment with its cut length printed, 45° mitred ends shown as corner chamfers with the angle beside them.",
       "SHEET-n-review.svg: nested panel layout, colour = cabinet.",
       "SHEET-n-cnc.dxf: CNC nesting DXF in the master convention — AC1015, millimetres, layers STOCK (blank edge), CUT_OUTER (closed panel contours, one label per part on PART_ID).",
       "PANEL NOTCHES (master cabinetrix through-notch): U-notched bottom/top/shelf panels carry 27.4 mm slots at every front upright (25.4 mm post + 1 mm clearance per edge), 13.7 mm deep (= 38.1 − 25.4 + 1). Intervals are listed in panel-cuts.csv (Notches column) and drawn on the nesting SVGs.",
