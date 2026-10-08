@@ -1,7 +1,8 @@
 <!doctype html>
 <!-- ============================================================
-     TEMPORARY MOCK — cooker run-frame fix preview (AJ's kitchen).
-     Editable standalone page: sliders + Before/After + Match button.
+     TEMPORARY MOCK — cooker run-frame + dead-level preview (AJ's kitchen).
+     Editable standalone page: height sliders + Before/After presets.
+     Opens DEAD LEVEL: cooker = run = 850. Heights stay user-editable.
      NOT part of the app build. Safe to delete anytime.
      Geometry mirrors the app (wall A run 2900: corner 600 / base
      550 / cooker 600 / base 550 / corner 600, worktop 25, hob).
@@ -47,13 +48,13 @@
   </div>
   <aside id="panel">
     <h1>Cooker run frame fix <span class="tag">temporary mock</span></h1>
-    <p class="sub">Your kitchen wall A (2900): corner 600 + base 550 + <b>cooker</b> + base 550 + corner 600. Move the sliders, flip Before / After, try Frame only vs Finished.</p>
+    <p class="sub">Your kitchen wall A (2900): corner 600 + base 550 + <b>cooker</b> + base 550 + corner 600. Everything stays editable — slide the heights, flip Before / After. Opens <b>dead level</b> (cooker = run = 850).</p>
     <div class="row">
       <button id="pBefore">Before (old app)</button>
       <button id="pAfter" class="on">After (fix)</button>
     </div>
     <fieldset><legend>Editable</legend><div id="ctls"></div>
-      <div class="row"><button id="matchBtn">Match run height (850)</button></div>
+      <div class="row"><button id="matchBtn">Match cooker to run (dead level)</button></div>
     </fieldset>
     <fieldset><legend>View</legend>
       <div class="row" id="modes">
@@ -69,8 +70,9 @@
       <b>What this shows</b>
       <ul>
         <li class="bad"><b>Before:</b> the cooker at 870 vs neighbours 850 splits the run — the cooker gets its OWN box frame: <b>paired posts at both seams</b>, its own plinth, top rail 20 mm higher. That is the "detached" bay you saw.</li>
-        <li class="good"><b>After:</b> a difference up to 32 mm stays on <b>ONE continuous run frame</b> — shared rails running through, single upright at each seam, one plinth. Tested against your saved kitchen.</li>
-        <li>The cooker keeps its own height (door + worktop + hob at 870 → worktop step 20 mm). Use <b>Match run height</b> to make the whole run dead level (850) — that is the one field in the Cabinet editor.</li>
+        <li class="good"><b>After:</b> height differences up to 32 mm stay on <b>ONE continuous run frame</b> — shared rails, single upright per seam, one plinth. Tested against your saved kitchen.</li>
+        <li><b>Dead level:</b> both heights equal = no worktop step. This page opens 850/850. Slide the cooker to 870 to see it still stays on the same frame (only the worktop steps 20 mm); past 32 mm it becomes a deliberate split.</li>
+        <li><b>Editable in the app:</b> Cabinet editor → <b>Cabinet height</b> (100–3000 mm) on any unit — set the cooker equal to the run height for a level worktop.</li>
       </ul>
     </div>
   </aside>
@@ -90,7 +92,7 @@ addEventListener('error',e=>showErr(e.message));
 
 /* ---------- params (editable) ---------- */
 const TOL=32;
-const P={cookerH:870,approach:'after',mode:'frames'};
+const P={cookerH:850,baseH:850,approach:'after',mode:'frames'};
 const BAYS=[
   {id:'corner',x:0,w:600},
   {id:'base',x:600,w:550},
@@ -99,7 +101,7 @@ const BAYS=[
   {id:'corner',x:2300,w:600},
 ];
 const BASE_H=850,RUNW=2900,TOP=25,PH=38,PW=38;
-const bayH=b=>b.id==='cooker'?P.cookerH:BASE_H;
+const bayH=b=>b.id==='cooker'?P.cookerH:P.baseH;
 function runsOf(){
   const groups=[];let run=null;
   for(const b of BAYS){
@@ -111,6 +113,7 @@ function runsOf(){
   return groups;
 }
 const CFG=[
+  ['baseH','Run (base) cabinet height',830,950,5],
   ['cookerH','Cooker cabinet height',830,950,5],
 ];
 const views={front:[[1450,1300,4600],[1450,1150,150]],corner:[[3600,2450,4200],[1350,1100,150]],top:[[1450,4300,1600],[1450,0,300]]};
@@ -206,9 +209,10 @@ function build(){
 
   // ---------- datums ----------
   const top=Math.max(...BAYS.map(bayH));
-  ruler(root,850,'#2f6d4f',980);label(root,'run top rail 850','#2f6d4f',-190,890,1010,0.62);
-  if(P.cookerH!==850){
-    ruler(root,P.cookerH,'#b3391f',980);label(root,`cooker top ${P.cookerH} (${P.cookerH>850?'+':''}${P.cookerH-850} mm)`,'#b3391f',-190,P.cookerH+40,1010,0.62);
+  const delta=P.cookerH-P.baseH;
+  ruler(root,P.baseH,'#2f6d4f',980);label(root,`run top ${P.baseH}`,'#2f6d4f',-190,P.baseH+45,1010,0.62);
+  if(delta!==0){
+    ruler(root,P.cookerH,'#b3391f',980);label(root,`cooker top ${P.cookerH} (${delta>0?'+':''}${delta} mm)`,'#b3391f',980,P.cookerH+45,1010,0.62);
   }
   if(runs.length>1)label(root,'← paired posts at each seam →','#b3391f',900,300,1000,0.6);
   else label(root,'one continuous run frame 0–2900','#2f6d4f',700,300,1000,0.6);
@@ -218,11 +222,13 @@ function build(){
 function updReadout(){
   const runs=runsOf(),r=document.getElementById('readout');
   const seamList=runs.map(x=>`${x.start}–${x.end}`).join(' | ');
-  const step=P.cookerH!==850?Math.abs(P.cookerH-850):0;
+  const delta=P.cookerH-P.baseH,ad=Math.abs(delta);
+  const stepTag=runs.length>1?'<span class="bad">(detached — see seams)</span>':(ad===0?'<span class="good">(dead level)</span>':(ad<=TOL?'(one continuous frame — worktop steps)':'<span class="bad">(over '+TOL+' mm — splits into its own frame)</span>'));
   r.innerHTML=
    `Run frames: <b>${runs.length}</b>${runs.length>1?' <span class="bad">(cooker detached — own box frame)</span>':' <span class="good">(cooker on the shared run)</span>'}<br>`+
    `Spans: <b>${seamList}</b><br>`+
-   `Worktop step at cooker: <b>${step} mm</b>${step?'':' (level)'}`;
+   `Run height <b>${P.baseH}</b> · cooker height <b>${P.cookerH}</b> · Δ <b>${delta>0?'+':''}${delta} mm</b><br>`+
+   `Worktop step at cooker: <b>${ad} mm</b> ${stepTag}`;
 }
 /* ---------- controls ---------- */
 const ctls=document.getElementById('ctls');
@@ -233,11 +239,16 @@ for(const [key,lab,min,max,step] of CFG){
   inp.oninput=()=>{P[key]=+inp.value;out.value=inp.value;build();};
   ctls.appendChild(d);
 }
-function syncSlider(){const i=ctls.querySelector('input'),o=ctls.querySelector('output');if(i){i.value=P.cookerH;o.value=P.cookerH;}}
+function syncAll(){[...ctls.querySelectorAll('.ctl')].forEach((d,idx)=>{const key=CFG[idx][0],i=d.querySelector('input'),o=d.querySelector('output');if(i){i.value=P[key];o.value=P[key];}});}
 const pBefore=document.getElementById('pBefore'),pAfter=document.getElementById('pAfter');
-pBefore.onclick=()=>{P.approach='before';pBefore.classList.add('on');pAfter.classList.remove('on');build();};
-pAfter.onclick=()=>{P.approach='after';pAfter.classList.add('on');pBefore.classList.remove('on');build();};
-document.getElementById('matchBtn').onclick=()=>{P.cookerH=850;syncSlider();P.approach='after';pAfter.classList.add('on');pBefore.classList.remove('on');build();};
+function preset(which){
+  if(which==='before'){Object.assign(P,{baseH:850,cookerH:870,approach:'before'});pBefore.classList.add('on');pAfter.classList.remove('on');}
+  else{Object.assign(P,{baseH:850,cookerH:850,approach:'after'});pAfter.classList.add('on');pBefore.classList.remove('on');}
+  syncAll();build();
+}
+pBefore.onclick=()=>preset('before');
+pAfter.onclick=()=>preset('after');
+document.getElementById('matchBtn').onclick=()=>{P.cookerH=P.baseH;syncAll();build();};
 document.getElementById('modes').addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;[...e.currentTarget.children].forEach(x=>x.classList.toggle('on',x===b));P.mode=b.dataset.m;build();});
 function setView(v){const [p,t]=views[v];camera.position.set(...p);controls.target.set(...t);controls.update();render();}
 document.getElementById('vFront').onclick=()=>setView('front');
