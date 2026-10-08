@@ -621,6 +621,23 @@ function csv(headers, rows) {
     .join("\r\n");
 }
 export function fabricationFiles(job) {
+  const barTotals = new Map();
+  for (const stock of job.barNest.stocks) {
+    const t = barTotals.get(stock.key) || {
+      profile: stock.profile,
+      finish: stock.finish,
+      stockLength: stock.length,
+      bars: 0,
+      net: 0,
+    };
+    t.bars += 1;
+    t.net += stock.cuts.reduce((a, c) => a + c.length, 0);
+    barTotals.set(stock.key, t);
+  }
+  const barSummary = [...barTotals.values()].map(
+    (t) =>
+      `BAR STOCK — ${t.profile}${t.finish ? ` (${t.finish})` : ""}: ${t.bars} bar(s) of ${round(t.stockLength)} mm · net cut length ${(t.net / 1000).toFixed(2)} m · stock required ${((t.bars * t.stockLength) / 1000).toFixed(2)} m`,
+  );
   const files = {
     "fabrication-review.json": JSON.stringify(job, null, 2),
     "bom-review.csv": csv(
@@ -701,6 +718,7 @@ export function fabricationFiles(job) {
       "SHEET-n-cnc.dxf: CNC nesting DXF in the master convention — AC1015, millimetres, layers STOCK (blank edge), CUT_OUTER (closed panel contours, one label per part on PART_ID).",
       "PANEL NOTCHES (master cabinetrix through-notch): U-notched bottom/top/shelf panels carry 27.4 mm slots at every front upright (25.4 mm post + 1 mm clearance per edge), 13.7 mm deep (= 38.1 − 25.4 + 1). Intervals are listed in panel-cuts.csv (Notches column) and drawn on the nesting SVGs.",
       "SASH BARS: every sash bar is mitred 45°/45° at both ends. The hinge stile carries the source sash hinge + matching insert at 100 mm from each end (recipe sash-hinge-template, dashed ⌀ mark on its bar plan) — no ø35 board cup is drilled into hollow sash (master rule). Board fronts, if introduced, take ø35 × 13 mm cups at 22.5 mm from the hinge edge (recipe generic-cup-35), 2–4 per height.",
+      ...barSummary,
       ...job.errors,
       ...job.rejected.map((r) => `${r.id}: ${r.reason}`),
       ...job.warnings,

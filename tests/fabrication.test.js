@@ -567,3 +567,18 @@ test("Hinge stiles carry source insert positions; notches and mitres reach the w
   assert.ok(stock, "the hinge stile is nested on a stock bar");
   assert.ok(barSVG(stock).includes('class="hinge"'), "bar plan marks the hinge insert");
 });
+
+test("ZIP carries per-profile bar stock totals (old-app BOM parity)", () => {
+  const p = initialProject(), job = fabricationPlan(p, solve(p));
+  const files = fabricationFiles(job);
+  const readme = files["READ-ME.txt"];
+  assert.ok(readme.includes("BAR STOCK —"), "bar stock totals present");
+  const groups = new Set(job.barNest.stocks.map((s) => s.key));
+  assert.equal(
+    (readme.match(/BAR STOCK —/g) || []).length,
+    groups.size,
+    "one totals line per profile/finish/stock group",
+  );
+  assert.ok(/net cut length \d+\.\d+ m/.test(readme), "net cut length in metres");
+  assert.ok(/stock required \d+\.\d+ m/.test(readme), "stock metres required");
+});
