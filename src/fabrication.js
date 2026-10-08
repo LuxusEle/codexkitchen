@@ -496,15 +496,23 @@ export function barSVG(stock) {
     const len = pw >= idSize * 4
       ? `<text x="${round((x0 + x1) / 2)}" y="${round(TOP + H * 0.79)}" font-family="Arial" font-size="${round(lenFs)}" font-weight="600" text-anchor="middle" fill="#16303a" style="${halo(lenFs * 0.16)}">${round(p.length)}</text>`
       : "";
-    const mitFs = H * 0.13;
-    const mitreRoom = dxS * 2 + mitFs * 3 < pw * 0.62;
+    // Angle labels sit inside each end's mitre notch — the void above the
+    // sloped cut — in the clear strip just under the top edge, above the big
+    // piece-id text, and are painted last so nothing can cover them. Every
+    // mitred end with room carries its angle beside the cut it describes
+    // (title tooltip and bar-cuts.csv always carry it regardless).
+    const mitFs = H * 0.115;
+    const mitLabelW = mitFs * 1.75;
+    const mitFrac = 0.13;
+    const mitLabelY = TOP + H * mitFrac;
+    const notchLabel = (dx, angle, ax, dir) => {
+      if (!angle || dx * (1 - mitFrac) < mitLabelW * 1.2) return "";
+      const lx = dir > 0 ? ax + (dx * (1 - mitFrac)) / 2 : ax - (dx * (1 - mitFrac)) / 2;
+      return `<text x="${round(lx)}" y="${round(mitLabelY)}" font-family="Arial" font-size="${round(mitFs)}" font-weight="600" text-anchor="middle" fill="#8a3524" style="${halo(mitFs * 0.16)}">${angle}°</text>`;
+    };
     const mitres = [
-      p.miterStart && dxS > H * 0.18 && mitreRoom
-        ? `<text x="${round(x0 + dxS + mitFs * 0.7)}" y="${round(TOP + H * 0.2)}" font-family="Arial" font-size="${round(mitFs)}" font-weight="600" fill="#8a3524">${p.miterStart}°</text>`
-        : "",
-      p.miterEnd && dxE > H * 0.18 && mitreRoom
-        ? `<text x="${round(x1 - dxE - mitFs * 0.7)}" y="${round(TOP + H * 0.2)}" font-family="Arial" font-size="${round(mitFs)}" font-weight="600" text-anchor="end" fill="#8a3524">${p.miterEnd}°</text>`
-        : "",
+      notchLabel(dxS, p.miterStart, x0, 1),
+      notchLabel(dxE, p.miterEnd, x1, -1),
     ].join("");
     const hingeMarks = (p.hingeInserts || [])
       .map((s) => {
@@ -513,7 +521,7 @@ export function barSVG(stock) {
         return `<g class="hinge"><line x1="${round(hx)}" y1="${round(TOP)}" x2="${round(hx)}" y2="${round(BOT)}" stroke="#8a3524" stroke-width="${round(mw)}" stroke-dasharray="${round(Math.max(5, strokeW * 3))} ${round(Math.max(4, strokeW * 2))}"/><circle cx="${round(hx)}" cy="${round(TOP + H * 0.74)}" r="${round(Math.max(4, H * 0.085))}" fill="none" stroke="#8a3524" stroke-width="${round(mw)}"/><title>Sash hinge + insert @ ${round(s)} from this end</title></g>`;
       })
       .join("");
-    return `<g><title>${esc(p.id)} · ${esc(p.name || "")} · ${round(p.length)} mm · ${p.miterStart}/${p.miterEnd}° · ${esc((p.unitIds || []).join(" "))}${p.hingeInserts?.length ? ` · sash hinge insert ×${p.hingeInserts.length} (${round(p.hingeInserts[0])} from each end)` : ""}</title><polygon points="${pts}" fill="${partColor(p)}" stroke="#123f45" stroke-width="${round(strokeW)}"/>${mitres}${hingeMarks}${id}${len}</g>`;
+    return `<g><title>${esc(p.id)} · ${esc(p.name || "")} · ${round(p.length)} mm · ${p.miterStart}/${p.miterEnd}° · ${esc((p.unitIds || []).join(" "))}${p.hingeInserts?.length ? ` · sash hinge insert ×${p.hingeInserts.length} (${round(p.hingeInserts[0])} from each end)` : ""}</title><polygon points="${pts}" fill="${partColor(p)}" stroke="#123f45" stroke-width="${round(strokeW)}"/>${hingeMarks}${id}${len}${mitres}</g>`;
   };
   const cuts = [...stock.cuts];
   const lastEnd = cuts.length
