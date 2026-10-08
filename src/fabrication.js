@@ -256,7 +256,7 @@ export function fabricationPlan(p, plan) {
                 ),
                 hingeRecipe: "sash-hinge-template",
                 hingeNote:
-                  "Sash hinge + matching insert; hollow profile — no generic ø35 board cup",
+                  "Sash hinge + matching insert; ⌀35 hinge cup register — hollow profile takes the insert, not a generic board cup",
               }
             : {}),
         });
@@ -516,10 +516,10 @@ export function barSVG(stock) {
         let topY = TOP;
         if (hx - x0 < chS) topY = TOP + chS;
         if (x1 - hx < chE) topY = Math.max(topY, TOP + chE);
-        return `<g class="hinge"><line x1="${round(hx)}" y1="${round(topY)}" x2="${round(hx)}" y2="${round(BOT)}" stroke="#8a3524" stroke-width="${round(mw)}" stroke-dasharray="${round(Math.max(5, strokeW * 3))} ${round(Math.max(4, strokeW * 2))}"/><circle cx="${round(hx)}" cy="${round(TOP + H * 0.74)}" r="${round(Math.max(4, H * 0.085))}" fill="none" stroke="#8a3524" stroke-width="${round(mw)}"/><title>Sash hinge + insert @ ${round(s)} from this end</title></g>`;
+        return `<g class="hinge"><line x1="${round(hx)}" y1="${round(topY)}" x2="${round(hx)}" y2="${round(BOT)}" stroke="#8a3524" stroke-width="${round(mw)}" stroke-dasharray="${round(Math.max(5, strokeW * 3))} ${round(Math.max(4, strokeW * 2))}"/><circle cx="${round(hx)}" cy="${round(TOP + H * 0.74)}" r="17.5" fill="none" stroke="#8a3524" stroke-width="${round(mw)}"/><text x="${round(hx)}" y="${round(TOP + H * 0.88)}" font-family="Arial" font-size="${round(H * 0.11)}" font-weight="700" text-anchor="middle" fill="#8a3524">⌀35</text><title>Sash hinge register ⌀35 @ ${round(s)} mm from this end — matching insert (sash-hinge-template)</title></g>`;
       })
       .join("");
-    return `<g><title>${esc(p.id)} · ${esc(p.name || "")} · ${round(p.length)} mm · ${p.miterStart}/${p.miterEnd}° · ${esc((p.unitIds || []).join(" "))}${p.hingeInserts?.length ? ` · sash hinge insert ×${p.hingeInserts.length} (${round(p.hingeInserts[0])} from each end)` : ""}</title><polygon class="bar-cut" points="${ptsAttr}" fill="${partColor(p)}" stroke="#123f45" stroke-width="${round(strokeW)}"/>${hingeMarks}${id}${len}${mitres}</g>`;
+    return `<g><title>${esc(p.id)} · ${esc(p.name || "")} · ${round(p.length)} mm · ${p.miterStart}/${p.miterEnd}° · ${esc((p.unitIds || []).join(" "))}${p.hingeInserts?.length ? ` · sash hinge register ×${p.hingeInserts.length} (⌀35, ${round(p.hingeInserts[0])} from each end)` : ""}</title><polygon class="bar-cut" points="${ptsAttr}" fill="${partColor(p)}" stroke="#123f45" stroke-width="${round(strokeW)}"/>${hingeMarks}${id}${len}${mitres}</g>`;
   };
   const cuts = [...stock.cuts];
   const lastEnd = cuts.length
@@ -534,7 +534,7 @@ export function barSVG(stock) {
             : ""
         }</g>`
       : "";
-  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${L} ${round(VIEWH)}" role="img" aria-label="${esc(stock.id)}"><rect width="${L}" height="${round(VIEWH)}" fill="#fbfdfb"/><rect x="0" y="${round(TOP)}" width="${L}" height="${round(H)}" fill="#e1e6e2"/><text x="${round(L * 0.004)}" y="${round(H * 0.13)}" font-family="Arial" font-size="${round(H * 0.15)}" font-weight="700" fill="#31565c">${esc(stock.id)} · ${esc(stock.profile)} · stock ${round(L)} mm · cuts run left → right · colour = cabinet${stock.cuts.some((c) => c.miterStart || c.miterEnd) ? " · red 45° = mitred (chamfered) end cut" : ""}${stock.cuts.some((c) => c.hingeInserts?.length) ? " · ⌀ dashed = sash hinge insert" : ""}</text>${stock.cuts.map(piece).join("")}${leftoverRect}${legendRow(stock.cuts, BOT + H * 0.12, H * 0.155)}</svg>`;
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${L} ${round(VIEWH)}" role="img" aria-label="${esc(stock.id)}"><rect width="${L}" height="${round(VIEWH)}" fill="#fbfdfb"/><rect x="0" y="${round(TOP)}" width="${L}" height="${round(H)}" fill="#e1e6e2"/><text x="${round(L * 0.004)}" y="${round(H * 0.13)}" font-family="Arial" font-size="${round(H * 0.15)}" font-weight="700" fill="#31565c">${esc(stock.id)} · ${esc(stock.profile)} · stock ${round(L)} mm · cuts run left → right · colour = cabinet${stock.cuts.some((c) => c.miterStart || c.miterEnd) ? " · red 45° = mitred (chamfered) end cut" : ""}${stock.cuts.some((c) => c.hingeInserts?.length) ? " · ⌀35 dashed = hinge cup register" : ""}</text>${stock.cuts.map(piece).join("")}${leftoverRect}${legendRow(stock.cuts, BOT + H * 0.12, H * 0.155)}</svg>`;
 }
 // CNC nesting DXF in the master convention (cabinex_master.rb dxf/poly/label):
 // AC1015, millimetres ($INSUNITS 4), LTYPE+LAYER tables built from used layers.
@@ -672,7 +672,7 @@ export function fabricationFiles(job) {
         p.stockLength,
         p.endDetail || "Square cut",
         p.hingeInserts?.length
-          ? `${p.hingeRecipe} @ ${round(p.hingeInserts[0])} mm from each end`
+          ? `${p.hingeRecipe} @ ${round(p.hingeInserts[0])} mm from each end · ⌀35 register`
           : "",
       ]),
     ),
@@ -723,7 +723,7 @@ export function fabricationFiles(job) {
       "SHEET-n-review.svg: nested panel layout, colour = cabinet.",
       "SHEET-n-cnc.dxf: CNC nesting DXF in the master convention — AC1015, millimetres, layers STOCK (blank edge), CUT_OUTER (closed panel contours, one label per part on PART_ID).",
       "PANEL NOTCHES (master cabinetrix through-notch): U-notched bottom/top/shelf panels carry 27.4 mm slots at every front upright (25.4 mm post + 1 mm clearance per edge), 13.7 mm deep (= 38.1 − 25.4 + 1). Intervals are listed in panel-cuts.csv (Notches column) and drawn on the nesting SVGs.",
-      "SASH BARS: every sash bar is mitred 45°/45° at both ends. The hinge stile carries the source sash hinge + matching insert at 100 mm from each end (recipe sash-hinge-template, dashed ⌀ mark on its bar plan) — no ø35 board cup is drilled into hollow sash (master rule). Board fronts, if introduced, take ø35 × 13 mm cups at 22.5 mm from the hinge edge (recipe generic-cup-35), 2–4 per height.",
+      "SASH BARS: every sash bar is mitred 45°/45° at both ends. The hinge stile carries the source sash hinge + matching insert at 100 mm from each end (recipe sash-hinge-template; ⌀35 hinge cup register marked on its bar plan). Hollow sash takes the matching insert, not a generic board cup. Board fronts, if introduced, take ø35 × 13 mm cups at 22.5 mm from the hinge edge (recipe generic-cup-35), 2–4 per height.",
       ...barSummary,
       ...job.errors,
       ...job.rejected.map((r) => `${r.id}: ${r.reason}`),

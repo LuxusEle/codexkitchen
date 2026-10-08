@@ -191,48 +191,63 @@ export function CostingControls({ p, plan, job, onChange }) {
 }
 
 export function ProfileSection() {
-  const loop = (points) =>
-    points.map(([d, f], i) => `${i ? "L" : "M"} ${d} ${-f}`).join(" ") + " Z";
+  // Two assembled sections from one contour set. What the shop must read is
+  // which side of the shared edge the grip sits on for each door type: base
+  // doors carry the grip at the top edge (the lip rises above the sash),
+  // upper doors at the bottom edge (the lip hangs below).
+  const loop = (points, dx, faceDown) =>
+    points
+      .map(([d, f], i) => `${i ? "L" : "M"} ${dx + d} ${faceDown ? f : -f}`)
+      .join(" ") + " Z";
+  const panel = (dx, faceDown, label, labelY) => (
+    <g>
+      <path
+        d={`${loop(SASH_PROFILE.outer, dx, faceDown)} ${loop(SASH_PROFILE.inner, dx, faceDown)}`}
+        fillRule="evenodd"
+        fill="#526b6a"
+      />
+      <path d={loop(HANDLE_PROFILE.outer, dx, faceDown)} fill="#178c91" />
+      <rect
+        x={dx + SASH_PROFILE.panelDepth}
+        y={faceDown ? 10 : -25}
+        width="3"
+        height="15"
+        fill="#dda64b"
+      />
+      <text x={dx} y={labelY} fontSize="3.4" fontWeight="700" fill="#31565c">
+        {label}
+      </text>
+    </g>
+  );
   return (
     <div className="profile-detail">
       <svg
-        viewBox="-9 -52 40 92"
+        viewBox="-9 -52 95 112"
         role="img"
-        aria-label="Detailed web sash: hollow chamber, shelf, retaining channel and return lip; combined-engine grip adaptation"
+        aria-label="Two assembled sections: base door, grip rising above the sash top edge, mouth facing outward; upper door, grip hanging below the sash bottom edge. Detailed web sash with hollow chamber, channel and return lip; grip mounted at the matched depth datum."
       >
-        <path
-          d={`${loop(SASH_PROFILE.outer)} ${loop(SASH_PROFILE.inner)}`}
-          fillRule="evenodd"
-          fill="#526b6a"
-        />
-        <path d={loop(HANDLE_PROFILE.outer)} fill="#178c91" />
-        <rect
-          x={SASH_PROFILE.panelDepth}
-          y="-25"
-          width="3"
-          height="15"
-          fill="#dda64b"
-        />
+        {panel(0, true, "BASE DOORS · GRIP AT TOP", 51)}
+        {panel(33, false, "UPPER DOORS · GRIP AT BOTTOM", 38)}
       </svg>
       <div>
-        <h3>Detailed lipped sash — retained</h3>
+        <h3>Detailed lipped sash + grip — as assembled</h3>
         <p>
-          45 mm face · 21.2 mm depth · 1.5 mm wall.
+          45 mm face · 21.2 mm depth · 1.5 mm wall · grip rise 32 mm.
           <br />
           Hollow chamber, channel and return lip from Aluminum/sash.js. Gold
           shows the seated infill.
         </p>
         <p>
-          Upper doors: bottom grip.
+          Base doors: grip rises at the top edge, mouth facing outward.
           <br />
-          Base doors: top grip.
+          Upper doors: grip hangs at the bottom edge.
           <br />
           Sash body mitred; grip lip ends square.
         </p>
         <small>
-          Teal grip adapted from the combined engine without replacing the web
-          sash. This combined extrusion requires profile approval before
-          manufacture.
+          Teal grip adapted from the combined engine at the matched depth
+          datum, without replacing the web sash. This combined extrusion
+          requires profile approval before manufacture.
         </small>
       </div>
     </div>

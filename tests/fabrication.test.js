@@ -566,6 +566,10 @@ test("Hinge stiles carry source insert positions; notches and mitres reach the w
   const stock = job.barNest.stocks.find((s) => s.cuts.some((c) => c.hingeInserts?.length));
   assert.ok(stock, "the hinge stile is nested on a stock bar");
   assert.ok(barSVG(stock).includes('class="hinge"'), "bar plan marks the hinge insert");
+  assert.ok(barSVG(stock).includes('r="17.5"'), "hinge mark is drawn at the true ⌀35 register size");
+  assert.ok(barSVG(stock).includes("⌀35"), "hinge mark is labelled ⌀35");
+  assert.ok(files["READ-ME.txt"].includes("⌀35 hinge cup register"), "READ-ME records the ⌀35 hinge register");
+  assert.ok(files["bar-cuts.csv"].includes("⌀35 register"), "bar CSV records the ⌀35 register");
 });
 
 test("ZIP carries per-profile bar stock totals (old-app BOM parity)", () => {
