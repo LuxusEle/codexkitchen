@@ -506,61 +506,82 @@ export function barSVG(stock) {
       : "";
   return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${L} ${round(VIEWH)}" role="img" aria-label="${esc(stock.id)}"><rect width="${L}" height="${round(VIEWH)}" fill="#fbfdfb"/><rect x="0" y="${round(TOP)}" width="${L}" height="${round(H)}" fill="#e1e6e2"/><text x="${round(L * 0.004)}" y="${round(H * 0.13)}" font-family="Arial" font-size="${round(H * 0.15)}" font-weight="700" fill="#31565c">${esc(stock.id)} · ${esc(stock.profile)} · stock ${round(L)} mm · cuts run left → right · colour = cabinet</text>${stock.cuts.map(piece).join("")}${leftoverRect}${legendRow(stock.cuts, BOT + H * 0.12, H * 0.155)}</svg>`;
 }
-// CNC-ready DXF R12 (AC1009), millimetres, origin bottom-left, Y up.
-// Layers: CUT (contours) · LABEL (part id + size) · SHEET (blank edge) · INFO (title).
+// CNC nesting DXF in the master convention (cabinex_master.rb dxf/poly/label):
+// AC1015, millimetres ($INSUNITS 4), LTYPE+LAYER tables built from used layers.
+// Layers: STOCK (blank edge) · CUT_OUTER (closed panel contours) · PART_ID (labels).
 export function sheetDXF(sheet) {
-  const f = (n) => String(round(n));
-  const L = [];
-  const P = (...a) => L.push(...a);
-  P("0", "SECTION", "2", "HEADER",
-    "9", "$ACADVER", "1", "AC1009",
-    "9", "$INSBASE", "10", "0", "20", "0", "30", "0",
-    "9", "$EXTMIN", "10", "0", "20", "0", "30", "0",
-    "9", "$EXTMAX", "10", f(sheet.width), "20", f(sheet.height), "30", "0",
-    "9", "$MEASUREMENT", "70", "1",
-    "0", "ENDSEC");
-  const layers = [["CUT", 1], ["LABEL", 3], ["SHEET", 8], ["INFO", 5]];
-  P("0", "SECTION", "2", "TABLES", "0", "TABLE", "2", "LAYER", "70", String(layers.length));
-  for (const [name, color] of layers)
-    P("0", "LAYER", "2", name, "70", "0", "62", String(color), "6", "CONTINUOUS");
-  P("0", "ENDTAB", "0", "ENDSEC");
-  P("0", "SECTION", "2", "BLOCKS", "0", "ENDSEC");
-  const line = (layer, x1, y1, x2, y2) =>
-    P("0", "LINE", "8", layer,
-      "10", f(x1), "20", f(y1), "30", "0",
-      "11", f(x2), "21", f(y2), "31", "0");
-  const text = (layer, x, y, h, str) =>
-    P("0", "TEXT", "8", layer,
-      "10", f(x), "20", f(y), "30", "0",
-      "40", f(h), "1", String(str).replace(/[\r\n]+/g, " "));
-  P("0", "SECTION", "2", "ENTITIES");
-  line("SHEET", 0, 0, sheet.width, 0);
-  line("SHEET", sheet.width, 0, sheet.width, sheet.height);
-  line("SHEET", sheet.width, sheet.height, 0, sheet.height);
-  line("SHEET", 0, sheet.height, 0, 0);
-  text("INFO", 10, sheet.height - 26, 16,
-    `${sheet.id} | ${sheet.material} ${sheet.thickness}mm | blank ${sheet.width}x${sheet.height} | ${sheet.placements.length} parts | ENGINEERING REVIEW - NOT MACHINE RELEASE`);
-  for (const p of sheet.placements) {
-    const pts = placedOutline(p).map(([x, y]) => [x, sheet.height - y]);
-    for (let i = 0; i < pts.length; i++) {
-      const [x1, y1] = pts[i], [x2, y2] = pts[(i + 1) % pts.length];
-      line("CUT", x1, y1, x2, y2);
+  const NL = String.fromCharCode(13, 10);
+  const r4 = (n) => String(Math.round(Number(n) * 10000) / 10000);
+  const body = [];
+  const pair = (code, value) => {
+    body.push(String(code));
+    body.push(String(value));
+  };
+  const poly = (points, layer) => {
+    pair(0, "LWPOLYLINE");
+    pair(100, "AcDbEntity");
+    pair(8, layer);
+    pair(100, "AcDbPolyline");
+    pair(90, points.length);
+    pair(70, 1);
+    for (const [x, y] of points) {
+      pair(10, r4(x));
+      pair(20, r4(y));
     }
-    const xs = pts.map((v) => v[0]), ys = pts.map((v) => v[1]);
-    const cx = (Math.min(...xs) + Math.max(...xs)) / 2,
-      cy = (Math.min(...ys) + Math.max(...ys)) / 2;
-    const wmm = p.rotated ? p.cutH : p.cutW,
-      hmm = p.rotated ? p.cutW : p.cutH;
-    const label = String(p.id),
-      dims = `${f(wmm)}x${f(hmm)}`;
-    const h1 = Math.max(6, Math.min(20, p.w * 0.6 / Math.max(1, label.length) * 1.6, p.h * 0.4));
-    const h2 = Math.max(4.5, h1 * 0.66);
-    text("LABEL", cx - (label.length * h1 * 0.31), cy + h1 * 0.2, h1, label);
-    if (p.w > 130 && p.h > 60)
-      text("LABEL", cx - (dims.length * h2 * 0.31), cy - h1 * 0.75, h2, dims);
+  };
+  const label = (x, y, str, h) => {
+    pair(0, "TEXT");
+    pair(100, "AcDbEntity");
+    pair(8, "PART_ID");
+    pair(100, "AcDbText");
+    pair(10, r4(x));
+    pair(20, r4(y));
+    pair(30, 0);
+    pair(40, r4(h));
+    pair(1, String(str));
+  };
+  poly(
+    [
+      [0, 0],
+      [sheet.width, 0],
+      [sheet.width, sheet.height],
+      [0, sheet.height],
+    ],
+    "STOCK",
+  );
+  for (const p of sheet.placements) {
+    poly(placedOutline(p), "CUT_OUTER");
+    label(p.x + 8, p.y + 18, p.id, 8);
   }
-  P("0", "ENDSEC", "0", "EOF");
-  return L.join("\r\n") + "\r\n";
+  const used = ["0", "PART_ID"];
+  for (let i = 0; i < body.length; i += 2)
+    if (body[i] === "8") used.push(body[i + 1]);
+  const layers = [...new Set(used)];
+  const L = [];
+  const P = (...a) => L.push(...a.map(String));
+  P(0, "SECTION", 2, "HEADER",
+    9, "$ACADVER", 1, "AC1015",
+    9, "$INSUNITS", 70, 4,
+    9, "$MEASUREMENT", 70, 1,
+    0, "ENDSEC");
+  P(0, "SECTION", 2, "TABLES");
+  P(0, "TABLE", 2, "LTYPE", 70, 1);
+  P(0, "LTYPE", 100, "AcDbSymbolTableRecord", 100, "AcDbLinetypeTableRecord",
+    2, "CONTINUOUS", 70, 0, 3, "Solid line", 72, 65, 73, 0, 40, "0.0");
+  P(0, "ENDTAB");
+  P(0, "TABLE", 2, "LAYER", 70, layers.length);
+  layers.forEach((name, i) => {
+    const color = name.indexOf("CUT") === 0 ? 7 : (i % 6) + 1;
+    P(0, "LAYER", 100, "AcDbSymbolTableRecord", 100, "AcDbLayerTableRecord",
+      2, name, 70, 0, 62, color, 6, "CONTINUOUS");
+  });
+  P(0, "ENDTAB");
+  P(0, "ENDSEC");
+  P(0, "SECTION", 2, "ENTITIES");
+  for (const v of body) L.push(v);
+  P(0, "ENDSEC");
+  P(0, "EOF");
+  return L.join(NL) + NL;
 }
 function csv(headers, rows) {
   return [headers, ...rows]
@@ -640,7 +661,7 @@ export function fabricationFiles(job) {
       "CONTENTS — bar-cuts.csv and panel-cuts.csv list every cut (ID, cabinet, size, mitre).",
       "BAR-n-review.svg: colour-coded cut plan per stock bar (colour = cabinet, mitre angles shown).",
       "SHEET-n-review.svg: nested panel layout, colour = cabinet.",
-      "SHEET-n-cnc.dxf: CNC-ready DXF R12 in millimetres, origin at bottom-left, Y up. Layers: CUT (contours), LABEL (part id + size), SHEET (blank edge), INFO (title).",
+      "SHEET-n-cnc.dxf: CNC nesting DXF in the master convention — AC1015, millimetres, layers STOCK (blank edge), CUT_OUTER (closed panel contours, one label per part on PART_ID).",
       ...job.errors,
       ...job.rejected.map((r) => `${r.id}: ${r.reason}`),
       ...job.warnings,

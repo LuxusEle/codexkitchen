@@ -512,7 +512,7 @@ test("Toe-base frame is floor-row only and is never added below top cabinets", (
 });
 
 const CRLF = String.fromCharCode(13, 10);
-test("Every nested sheet ships a labelled CNC DXF (R12, layers, closed contours, part labels)", () => {
+test("Every nested sheet ships a labelled CNC DXF in the master convention", () => {
   const p = initialProject(), plan = solve(p), job = fabricationPlan(p, plan);
   assert.ok(job.sheetNest.sheets.length > 0);
   const files = fabricationFiles(job);
@@ -521,15 +521,15 @@ test("Every nested sheet ships a labelled CNC DXF (R12, layers, closed contours,
   const sheet = job.sheetNest.sheets[0];
   const dxf = sheetDXF(sheet);
   assert.ok(dxf.startsWith("0" + CRLF + "SECTION"));
-  assert.ok(dxf.includes("AC1009"));
+  assert.ok(dxf.includes("AC1015"), "ACADVER AC1015 like the master");
+  assert.ok(dxf.includes("9" + CRLF + "$INSUNITS" + CRLF + "70" + CRLF + "4"), "drawing units are mm");
   assert.ok(dxf.trimEnd().endsWith("EOF"));
-  for (const layer of ["CUT", "LABEL", "SHEET", "INFO"])
+  for (const layer of ["STOCK", "CUT_OUTER", "PART_ID"])
     assert.ok(dxf.includes(layer), "layer " + layer);
-  const lineCount = dxf.split("0" + CRLF + "LINE" + CRLF).length - 1;
-  const expected = 4 + sheet.placements.reduce((n, pl) => n + (pl.outline ? pl.outline.length : 4), 0);
-  assert.equal(lineCount, expected, "one LINE per contour segment plus blank edge");
-  const textCount = dxf.split("0" + CRLF + "TEXT" + CRLF).length - 1;
-  assert.ok(textCount >= sheet.placements.length + 1, "a label per part plus the title block");
+  const polys = dxf.split("0" + CRLF + "LWPOLYLINE" + CRLF).length - 1;
+  assert.equal(polys, 1 + sheet.placements.length, "stock edge plus one closed contour per part");
+  const labels = dxf.split("0" + CRLF + "TEXT" + CRLF).length - 1;
+  assert.equal(labels, sheet.placements.length, "one PART_ID label per part");
   for (const pl of sheet.placements) assert.ok(dxf.includes("1" + CRLF + pl.id + CRLF), "label for " + pl.id);
 });
 test("Bar cut plans colour pieces by cabinet, draw mitred ends and print a legend", () => {
